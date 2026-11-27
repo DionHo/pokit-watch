@@ -66,8 +66,15 @@ exist on watchOS 10, and read the surrounding code before editing. Swift languag
   the wrong position is refused ("Mode not available") and stayed refused after the switch
   was corrected. 0.3.1 answers that with a retry button in place of the range/hold controls
   (`retryMode`), a restart as soon as Status reports another switch position (`switchMoved`),
-  and an idle command before the retried mode. None of this has been on a device yet, and why
-  the plain repeat every 4 s did not get the mode going is not known.
+  and an idle command before the retried mode. Why the plain repeat every 4 s did not get the
+  mode going is not known.
+- 0.3.1 on the owner's watch (2026-11-27): "only a black screen after a device was detected".
+  Cause not found. Reading the 0.3.0 -> 0.3.1 diff shows nothing that runs differently on a
+  normal connect, and no view can be empty, so it looks like a hang or crash on a path only a
+  real device takes (refused mode at connect, switch change) or something outside the diff.
+  Open questions to the owner: whole screen black or only the content (toolbar still there),
+  which device, the Pro's switch position, and whether 0.3.0 (TestFlight, previous builds)
+  still works. Do not ship further guesses on top of 0.3.1 before that is answered.
 - `main` only has what was merged with PR #2 (the Wristmeter rename and docs). Later work sits
   on the work branch until the owner asks for a PR.
 - Offered to the owner, not built: a wrist-down timeout that disconnects independently of
