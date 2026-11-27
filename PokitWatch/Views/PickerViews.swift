@@ -1,7 +1,8 @@
 import PokitKit
 import SwiftUI
 
-/// Sheet with the measurement modes of the connected product.
+/// Sheet with the measurement modes of the connected product, and the device's two other
+/// functions. It is the one place to switch between them.
 struct ModePickerView: View {
     @EnvironmentObject private var pokit: PokitCentral
     @Environment(\.dismiss) private var dismiss
@@ -27,7 +28,7 @@ struct ModePickerView: View {
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.7)
                                 Spacer(minLength: 2)
-                                if mode == pokit.mode {
+                                if mode == pokit.mode, pokit.tool == .meter {
                                     Image(systemName: "checkmark")
                                         .foregroundStyle(.tint)
                                 }
@@ -40,6 +41,10 @@ struct ModePickerView: View {
                         Text("Greyed-out modes need a different position of the switch on the Pokit.")
                     }
                 }
+                Section {
+                    toolRow(.scope, symbol: "waveform.path.ecg", title: "Oscilloscope")
+                    toolRow(.logger, symbol: "chart.xyaxis.line", title: "Data Logger")
+                }
             }
             .navigationTitle("Mode")
         }
@@ -47,6 +52,26 @@ struct ModePickerView: View {
 
     private func isExpected(_ mode: MultimeterMode) -> Bool {
         pokit.status?.switchPosition?.isExpectedToSupport(mode) ?? true
+    }
+
+    private func toolRow(_ tool: Tool, symbol: String, title: LocalizedStringKey) -> some View {
+        Button {
+            pokit.open(tool)
+            dismiss()
+        } label: {
+            HStack {
+                Image(systemName: symbol)
+                    .frame(width: 46, alignment: .leading)
+                Text(title)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Spacer(minLength: 2)
+                if pokit.tool == tool {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.tint)
+                }
+            }
+        }
     }
 }
 

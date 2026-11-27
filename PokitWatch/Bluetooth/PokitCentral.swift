@@ -43,7 +43,8 @@ enum ConnectionPhase: Equatable {
     case idle
     /// Looking for devices (for the list, or for a remembered device the system lost track of).
     case scanning
-    /// Waiting for the remembered device to come into range. This never times out.
+    /// Waiting for the remembered device to come into range. This does not time out while
+    /// the app is on screen.
     case connecting
     /// Connected, discovering services.
     case preparing
@@ -87,8 +88,13 @@ final class PokitCentral: NSObject, ObservableObject {
     @Published private(set) var torchIsOn: Bool?
     @Published private(set) var mode: MultimeterMode = .dcVoltage
     @Published private(set) var range: RangeSelection = .auto
+    /// Which of the device's functions is in use.
+    @Published private(set) var tool: Tool = .meter
 
     let meter = MeterState()
+    let scope = ScopeState()
+    let logger = LoggerState()
+    let diagnostics = DiagnosticsLog()
 
     // MARK: Private state
 
@@ -97,6 +103,8 @@ final class PokitCentral: NSObject, ObservableObject {
         static let deviceName = "device.name"
         static let deviceProduct = "device.product"
         static let mode = "meter.mode"
+        static let loggerMode = "logger.mode"
+        static let loggerInterval = "logger.interval"
     }
 
     private enum Timing {
@@ -109,6 +117,13 @@ final class PokitCentral: NSObject, ObservableObject {
         static let deadLinkTimeout: TimeInterval = 12
         static let statusPollInterval: TimeInterval = 30
         static let reconnectDelay: TimeInterval = 0.5
+        /// How long to wait after connecting for the data logger's state before assuming
+        /// that it is not recording.
+        static let startupTimeout: TimeInterval = 1.5
+        /// The oscilloscope and the logger can be silent for a long time (waiting for a
+        /// trigger, recording). A small read this often keeps a live link apart from a dead one.
+        static let keepAliveInterval: TimeInterval = 4
+        static let loggerPollInterval: TimeInterval = 10
     }
 
     private enum GATT {
@@ -126,6 +141,15 @@ final class PokitCentral: NSObject, ObservableObject {
         static let torch = CBUUID(string: PokitUUID.torch)
         static let buttonPress = CBUUID(string: PokitUUID.buttonPress)
 
+        static let dso = CBUUID(string: PokitUUID.dsoService)
+        static let dsoSettings = CBUUID(string: PokitUUID.dsoSettings)
+        static let dsoMetadata = CBUUID(string: PokitUUID.dsoMetadata)
+        static let dsoReading = CBUUID(string: PokitUUID.dsoReading)
+        static let logger = CBUUID(string: PokitUUID.loggerService)
+        static let loggerSettings = CBUUID(string: PokitUUID.loggerSettings)
+        static let loggerMetadata = CBUUID(string: PokitUUID.loggerMetadata)
+        static let loggerReading = CBUUID(string: PokitUUID.loggerReading)
+
         static let manufacturer = CBUUID(string: PokitUUID.manufacturerName)
         static let model = CBUUID(string: PokitUUID.modelNumber)
         static let serial = CBUUID(string: PokitUUID.serialNumber)
@@ -133,12 +157,15 @@ final class PokitCentral: NSObject, ObservableObject {
         static let hardware = CBUUID(string: PokitUUID.hardwareRevision)
         static let software = CBUUID(string: PokitUUID.softwareRevision)
 
-        static let services = [statusMeter, statusPro, multimeter, deviceInformation]
+        static let services = [statusMeter, statusPro, multimeter, dso, logger, deviceInformation]
+        // The logger's state comes first: nothing is started on the device before it is known.
         static let readOnConnect = [
-            deviceCharacteristics, status, deviceName, torch,
+            loggerMetadata, deviceCharacteristics, status, deviceName, torch,
             manufacturer, model, serial, firmware, hardware, software,
         ]
-        static let notifyOnConnect = [reading, status, buttonPress, torch]
+        static let notifyOnConnect = [
+            reading, status, buttonPress, torch, dsoMetadata, dsoReading, loggerMetadata, loggerReading,
+        ]
     }
 
     private let defaults = UserDefaults.standard
@@ -151,7 +178,10 @@ final class PokitCentral: NSObject, ObservableObject {
     private var characteristics: [CBUUID: CBCharacteristic] = [:]
     private var pendingServiceDiscoveries = 0
 
+    /// The app is on screen. Only then is there a link to the meter, see `setAppActive`.
     private var appIsActive = true
+    /// Closes the link shortly after the app left the screen, once the idle command is out.
+    private var pendingClose: DispatchWorkItem?
     private var housekeeping: Timer?
     private var setupDeadline: Date?
     private var lastLinkActivity = Date.distantPast
@@ -163,6 +193,32 @@ final class PokitCentral: NSObject, ObservableObject {
     private var hadContinuity = false
     /// Restarts in a row without a single reading in between; slows down the retries.
     private var consecutiveFailures = 0
+    /// Connected and set up, but still waiting to learn whether the data logger is recording.
+    /// Until that is known nothing is written to the device, see `finishSetup`.
+    private var awaitingStartup = false
+    private var startupDeadline = Date.distantPast
+    private var lastKeepAlive = Date.distantPast
+
+    // Oscilloscope: one capture is assembled from a Metadata value and many sample packets.
+    private var scopeRaw: [Int16] = []
+    private var scopeMetadata: ScopeMetadata?
+    private var scopeArmedAt = Date.distantPast
+    private var lastScopePacket = Date.distantPast
+    private var scopeRearm: DispatchWorkItem?
+    /// The range the app's own auto-ranging has arrived at; `nil` starts from the highest.
+    private var scopeAutoRange: UInt8?
+
+    // Data logger: a fetch is assembled the same way.
+    private var loggerRaw: [Int16] = []
+    private var loggerFetchMetadata: LoggerMetadata?
+    private var lastLoggerPacket = Date.distantPast
+    private var lastLoggerPoll = Date.distantPast
+
+    /// The last multimeter command noted in the diagnostics, to keep repeats out of them.
+    private var lastNotedMeterWrite: Data?
+    /// A running oscilloscope produces several captures a second; only the first few after
+    /// a change are noted, so they do not push everything else out of the diagnostics.
+    private var scopeNoteBudget = 0
 
     // MARK: Lifecycle
 
@@ -178,6 +234,13 @@ final class PokitCentral: NSObject, ObservableObject {
             reconcileSelection(with: device.product)
         }
         meter.reset(for: mode)
+        if let stored = LoggerMode(rawValue: UInt8(truncatingIfNeeded: defaults.integer(forKey: Keys.loggerMode))) {
+            logger.mode = stored
+        }
+        let storedInterval = UInt32(truncatingIfNeeded: defaults.integer(forKey: Keys.loggerInterval))
+        if LoggerState.intervals.contains(storedInterval) {
+            logger.interval = storedInterval
+        }
 
         if let scenario = defaults.string(forKey: DemoMeter.argument) {
             startDemo(scenario)
@@ -245,12 +308,17 @@ final class PokitCentral: NSObject, ObservableObject {
             return
         }
         let old = peripheral
-        if phase == .ready {
-            write(.idle)
+        if phase == .ready, !awaitingStartup {
+            stopDeviceActivity()
         }
         remember(nil)
         peripheral = nil
         linkDown()
+        tool = .meter
+        scope.capture = nil
+        scopeAutoRange = nil
+        logger.metadata = nil
+        logger.log = nil
         status = nil
         details = DeviceDetails()
         discovered = []
@@ -275,6 +343,12 @@ final class PokitCentral: NSObject, ObservableObject {
 
     func select(mode newMode: MultimeterMode) {
         guard newMode != .idle else { return }
+        if tool != .meter {
+            // Starting a measurement would end a running log.
+            guard !logger.isSampling else { return }
+            leaveTool()
+            tool = .meter
+        }
         if newMode != mode {
             mode = newMode
             range = .auto
@@ -324,40 +398,147 @@ final class PokitCentral: NSObject, ObservableObject {
         phase == .ready && characteristics[GATT.torch] != nil
     }
 
-    /// Called when the app comes to the front or goes to the background.
+    // MARK: Tools
+
+    /// Switches between multimeter, oscilloscope and data logger.
+    func open(_ newTool: Tool) {
+        guard newTool != tool, !logger.isSampling else { return }
+        leaveTool()
+        tool = newTool
+        if let demo {
+            demo.show(newTool, central: self)
+            return
+        }
+        startTool()
+    }
+
+    func setScope(mode newMode: MultimeterMode) {
+        guard ScopeSettings.modes.contains(newMode), newMode != scope.mode else { return }
+        scope.mode = newMode
+        scope.range = .auto
+        scopeAutoRange = nil
+        scope.capture = nil
+        restartScope()
+    }
+
+    func setScope(range newRange: RangeSelection) {
+        guard newRange != scope.range else { return }
+        scope.range = newRange
+        restartScope()
+    }
+
+    func setScope(window newWindow: UInt32) {
+        guard newWindow != scope.window else { return }
+        scope.window = newWindow
+        restartScope()
+    }
+
+    func setScope(trigger newTrigger: ScopeTriggerKind) {
+        guard newTrigger != scope.trigger else { return }
+        scope.trigger = newTrigger
+        restartScope()
+    }
+
+    /// Run / hold for the oscilloscope.
+    func toggleScopeRunning() {
+        scope.isRunning.toggle()
+        WKInterfaceDevice.current().play(.click)
+        if scope.isRunning {
+            armScope()
+        } else {
+            scopeRearm?.cancel()
+            scopeRearm = nil
+            if scope.activity == .waiting, phase == .ready {
+                // Cancels a capture that is still waiting for its trigger.
+                writeScope(.idle)
+            }
+            scope.activity = .idle
+        }
+    }
+
+    func setLogger(mode newMode: LoggerMode) {
+        guard newMode != logger.mode else { return }
+        logger.mode = newMode
+        logger.rangeIndex = nil
+        defaults.set(Int(newMode.rawValue), forKey: Keys.loggerMode)
+    }
+
+    func setLogger(rangeIndex newIndex: UInt8) {
+        logger.rangeIndex = newIndex
+    }
+
+    func setLogger(interval newInterval: UInt32) {
+        logger.interval = newInterval
+        defaults.set(Int(newInterval), forKey: Keys.loggerInterval)
+    }
+
+    /// Starts a recording on the device. It keeps running without the watch.
+    func startLogger() {
+        guard demo == nil else { return }
+        guard phase == .ready, tool == .logger, !awaitingStartup, !logger.isSampling, let device else { return }
+        let ranges = device.product.ranges(for: logger.mode.multimeterMode)
+        var index = ranges.last?.index ?? 0
+        if let chosen = logger.rangeIndex, ranges.contains(where: { $0.index == chosen }) {
+            index = chosen
+        }
+        logger.startWasRejected = false
+        logger.log = nil
+        // The start time rides along as the timestamp, so the log can be dated later.
+        writeLogger(.start(
+            mode: logger.mode,
+            rangeIndex: index,
+            interval: logger.interval,
+            timestamp: UInt32(clamping: Int(Date().timeIntervalSince1970))
+        ))
+        readLoggerMetadata(after: 0.6)
+    }
+
+    /// Ends the recording and fetches what was recorded.
+    func stopLogger() {
+        guard demo == nil else { return }
+        guard phase == .ready, !awaitingStartup else { return }
+        writeLogger(.stop)
+        readLoggerMetadata(after: 0.6)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            self?.fetchLog()
+        }
+    }
+
+    /// Asks the device for everything recorded so far. Works during a recording too.
+    func fetchLog() {
+        guard demo == nil else { return }
+        guard phase == .ready, !awaitingStartup, !logger.isFetching,
+              characteristics[GATT.loggerSettings] != nil else { return }
+        loggerRaw.removeAll(keepingCapacity: true)
+        loggerFetchMetadata = nil
+        lastLoggerPacket = Date()
+        logger.isFetching = true
+        writeLogger(.refresh)
+    }
+
+    /// Called when the app appears on screen or leaves it (another app, the watch face, or
+    /// the system returning to the clock after the wrist has been down for a while).
     ///
-    /// In the background the meter is put into idle: readings would only wake the app for
-    /// nothing, and the Pokit saves power. The connection itself is kept where the system
-    /// allows it, so measuring resumes immediately when the wrist is raised.
+    /// The link only exists while the app is on screen. A connected Pokit uses more power than
+    /// one that is just waiting, and a pending connection would grab the meter the moment it
+    /// is switched on, whether anybody is looking or not. So leaving the screen ends the
+    /// measurement and the connection; coming back reconnects to the remembered device.
     func setAppActive(_ active: Bool) {
         guard active != appIsActive else { return }
         appIsActive = active
+        guard demo == nil else { return }
         if active {
+            diagnostics.add("on screen")
+            pendingClose?.cancel()
+            pendingClose = nil
+            consecutiveFailures = 0
             markLinkFresh()
-            if let peripheral, phase == .ready || phase == .preparing, peripheral.state != .connected {
-                // The link went down while the app was suspended and no callback arrived.
-                linkDown()
-                scheduleReconnect()
-            } else if phase == .ready {
-                applySettings()
-                pollStatus()
-            } else {
-                resume()
+            if device != nil {
+                phase = .connecting
             }
+            resume()
         } else {
-            if phase == .ready {
-                applySettings()
-                meter.isReceiving = false
-                // Ask for a moment of runtime so the idle command is sent before the app is suspended.
-                ProcessInfo.processInfo.performExpiringActivity(withReason: "Stop the meter") { expired in
-                    if !expired {
-                        Thread.sleep(forTimeInterval: 1)
-                    }
-                }
-            } else if phase == .scanning, device == nil {
-                stopScanning()
-                phase = .idle
-            }
+            suspendLink()
         }
     }
 
@@ -366,14 +547,64 @@ final class PokitCentral: NSObject, ObservableObject {
     /// Makes sure whatever should be happening is happening: connecting to the remembered
     /// device, or scanning when there is none.
     private func resume() {
-        guard isPoweredOn else { return }
+        guard isPoweredOn, appIsActive else { return }
         if device != nil {
-            if peripheral == nil || peripheral?.state == .disconnected {
+            if let peripheral, peripheral.state == .connected {
+                if phase != .ready, phase != .preparing {
+                    // Still connected from before the app left the screen (it came back before
+                    // the link was closed): set the link up again instead of reconnecting.
+                    prepare(peripheral)
+                }
+            } else if peripheral == nil || peripheral?.state == .disconnected {
                 beginConnection()
             }
-        } else if appIsActive {
+        } else {
             startScanning()
         }
+    }
+
+    /// Ends the measurement and the connection because the app is no longer on screen.
+    /// The device stays remembered; `setAppActive(true)` brings the link back.
+    private func suspendLink() {
+        diagnostics.add("off screen, closing link")
+        stopScanning()
+        let wasReady = phase == .ready
+        if wasReady, !awaitingStartup {
+            stopDeviceActivity()
+        }
+        linkDown()
+        phase = .idle
+        guard let peripheral else { return }
+
+        guard wasReady else {
+            // Also withdraws a connection request that is still waiting for the device.
+            central?.cancelPeripheralConnection(peripheral)
+            return
+        }
+        // A moment for the stop command to go out before the link is closed.
+        let close = DispatchWorkItem { [weak self] in
+            guard let self, !self.appIsActive else { return }
+            self.pendingClose = nil
+            self.central?.cancelPeripheralConnection(peripheral)
+        }
+        pendingClose = close
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: close)
+        // Ask for the runtime to get that far before the app is suspended.
+        ProcessInfo.processInfo.performExpiringActivity(withReason: "Disconnect the meter") { expired in
+            if !expired {
+                Thread.sleep(forTimeInterval: 1)
+            }
+        }
+    }
+
+    /// Starts service discovery on a connected peripheral.
+    private func prepare(_ peripheral: CBPeripheral) {
+        diagnostics.add("connected, discovering")
+        linkDown()
+        phase = .preparing
+        setupDeadline = Date().addingTimeInterval(Timing.setupTimeout)
+        peripheral.delegate = self
+        peripheral.discoverServices(GATT.services)
     }
 
     /// Makes mode and range valid for `product`: a mode the product does not have (capacitance
@@ -390,7 +621,7 @@ final class PokitCentral: NSObject, ObservableObject {
     }
 
     private func beginConnection() {
-        guard isPoweredOn, let central, let device else { return }
+        guard isPoweredOn, appIsActive, let central, let device else { return }
 
         let candidate: CBPeripheral?
         if let current = peripheral, current.identifier == device.id {
@@ -411,9 +642,13 @@ final class PokitCentral: NSObject, ObservableObject {
         stopScanning()
         peripheral = target
         target.delegate = self
+        if phase != .connecting {
+            diagnostics.add("connecting")
+        }
         phase = .connecting
         // A pending connection has no timeout: it completes whenever the Pokit is switched on
-        // and in range. That is exactly the wanted auto-reconnect behaviour.
+        // and in range. That is the wanted auto-reconnect behaviour while the app is on
+        // screen; `suspendLink` withdraws the request when it leaves.
         central.connect(target, options: nil)
     }
 
@@ -426,9 +661,10 @@ final class PokitCentral: NSObject, ObservableObject {
     /// Drops the current link and connects again from scratch.
     private func restartConnection() {
         guard let peripheral else { return }
+        diagnostics.add("restarting link (\(phase))")
         consecutiveFailures += 1
         linkDown()
-        phase = .connecting
+        phase = appIsActive ? .connecting : .idle
         central?.cancelPeripheralConnection(peripheral)
         // The disconnect callback normally triggers the reconnect; this covers the cases
         // where it does not arrive (e.g. cancelling a connection that was still pending).
@@ -452,6 +688,19 @@ final class PokitCentral: NSObject, ObservableObject {
         hadContinuity = false
         // Battery and switch position may have changed by the time the link is back.
         status = nil
+        awaitingStartup = false
+        scopeRearm?.cancel()
+        scopeRearm = nil
+        scopeRaw.removeAll()
+        scopeMetadata = nil
+        if scope.activity != .idle {
+            scope.activity = .idle
+        }
+        loggerRaw.removeAll()
+        loggerFetchMetadata = nil
+        if logger.isFetching {
+            logger.isFetching = false
+        }
         if meter.isReceiving {
             meter.isReceiving = false
         }
@@ -461,6 +710,11 @@ final class PokitCentral: NSObject, ObservableObject {
     }
 
     private func scheduleReconnect() {
+        guard appIsActive else {
+            // Nobody is looking: stay disconnected until the app is back on screen.
+            phase = .idle
+            return
+        }
         if device != nil {
             phase = .connecting
             DispatchQueue.main.asyncAfter(deadline: .now() + reconnectDelay) { [weak self] in
@@ -504,7 +758,85 @@ final class PokitCentral: NSObject, ObservableObject {
         phase = .ready
         lastStatusPoll = Date()
         markLinkFresh()
-        applySettings()
+
+        // Starting a measurement could end a recording the data logger is making, possibly
+        // one started hours ago. So the first command waits until the logger's state, which
+        // was just requested, has arrived (or it is clear that it will not).
+        awaitingStartup = true
+        startupDeadline = Date().addingTimeInterval(Timing.startupTimeout)
+        let has = { (uuid: CBUUID) in self.characteristics[uuid] != nil ? "yes" : "no" }
+        diagnostics.add("set up: \(characteristics.count) chars, dso \(has(GATT.dsoSettings)), logger \(has(GATT.loggerSettings))")
+        if characteristics[GATT.loggerMetadata] == nil {
+            beginActivity(loggerIsSampling: false, because: "no logger")
+        }
+    }
+
+    /// Ends the wait after connecting and starts what the current tool needs.
+    private func beginActivity(loggerIsSampling: Bool, because reason: String) {
+        guard awaitingStartup else { return }
+        awaitingStartup = false
+        if loggerIsSampling {
+            // A recording is in progress: show it and keep the hands off everything else.
+            tool = .logger
+        }
+        diagnostics.add("start \(tool) (\(reason))")
+        startTool()
+    }
+
+    /// Puts the device into the state the current tool needs.
+    private func startTool() {
+        guard phase == .ready, appIsActive, !awaitingStartup else { return }
+        markLinkFresh()
+        switch tool {
+        case .meter:
+            applySettings()
+        case .scope:
+            scopeNoteBudget = 9
+            if scope.isRunning {
+                armScope()
+            }
+        case .logger:
+            readLoggerMetadata()
+        }
+    }
+
+    /// Ends what the current tool was doing on the device, before another tool takes over.
+    private func leaveTool() {
+        switch tool {
+        case .meter:
+            if phase == .ready, !awaitingStartup {
+                write(.idle)
+            }
+            if meter.isReceiving {
+                meter.isReceiving = false
+            }
+        case .scope:
+            scopeRearm?.cancel()
+            scopeRearm = nil
+            if phase == .ready, !awaitingStartup {
+                writeScope(.idle)
+            }
+            scopeRaw.removeAll()
+            scopeMetadata = nil
+            scope.activity = .idle
+        case .logger:
+            loggerRaw.removeAll()
+            loggerFetchMetadata = nil
+            logger.isFetching = false
+        }
+    }
+
+    /// Tells the device to stop what the current tool started, before the link is closed.
+    /// A data log is left running: recording without the watch is its purpose.
+    private func stopDeviceActivity() {
+        switch tool {
+        case .meter:
+            write(.idle)
+        case .scope:
+            writeScope(.idle)
+        case .logger:
+            break
+        }
     }
 
     // MARK: Talking to the meter
@@ -515,16 +847,21 @@ final class PokitCentral: NSObject, ObservableObject {
         return MultimeterSettings(mode: mode, range: range, updateInterval: interval)
     }
 
-    /// Sends the selected mode to the meter, or idle while the app is in the background.
+    /// Sends the selected mode and range to the meter.
     private func applySettings() {
-        guard phase == .ready else { return }
-        write(appIsActive ? currentSettings() : .idle)
+        guard phase == .ready, appIsActive, tool == .meter, !awaitingStartup else { return }
+        write(currentSettings())
         lastNudge = Date()
     }
 
     private func write(_ settings: MultimeterSettings) {
         guard let peripheral, let characteristic = characteristics[GATT.settings] else { return }
-        peripheral.writeValue(settings.encoded(), for: characteristic, type: writeType(for: characteristic))
+        let data = settings.encoded()
+        if data != lastNotedMeterWrite {
+            lastNotedMeterWrite = data
+            diagnostics.add("mm write \(DiagnosticsLog.hex(data))")
+        }
+        peripheral.writeValue(data, for: characteristic, type: writeType(for: characteristic))
     }
 
     private func writeType(for characteristic: CBCharacteristic) -> CBCharacteristicWriteType {
@@ -544,13 +881,308 @@ final class PokitCentral: NSObject, ObservableObject {
         lastNudge = now
     }
 
+    // MARK: Oscilloscope
+
+    private func writeScope(_ settings: ScopeSettings) {
+        guard let peripheral, let characteristic = characteristics[GATT.dsoSettings] else {
+            noteScope("dso write: no characteristic")
+            return
+        }
+        let data = settings.encoded()
+        noteScope("dso write \(DiagnosticsLog.hex(data))")
+        peripheral.writeValue(data, for: characteristic, type: writeType(for: characteristic))
+    }
+
+    private func noteScope(_ text: String) {
+        guard scopeNoteBudget > 0 else { return }
+        scopeNoteBudget -= 1
+        diagnostics.add(text)
+    }
+
+    /// Changed settings apply to a new capture, also when the display was on hold.
+    private func restartScope() {
+        scopeNoteBudget = 9
+        if !scope.isRunning {
+            scope.isRunning = true
+        }
+        armScope()
+    }
+
+    /// Requests one capture. The device answers with Metadata and then the samples.
+    private func armScope() {
+        scopeRearm?.cancel()
+        scopeRearm = nil
+        guard phase == .ready, appIsActive, tool == .scope, !awaitingStartup, let device else { return }
+
+        let ranges = device.product.ranges(for: scope.mode)
+        // Without a better idea the highest range is the safe one to start from.
+        var index = ranges.last?.index ?? 0
+        switch scope.range {
+        case .fixed(let fixed):
+            if ranges.contains(where: { $0.index == fixed }) {
+                index = fixed
+            }
+        case .auto:
+            if let chosen = scopeAutoRange, ranges.contains(where: { $0.index == chosen }) {
+                index = chosen
+            }
+        }
+
+        let trigger: ScopeTrigger
+        switch scope.trigger {
+        case .off: trigger = .freeRunning
+        case .rising: trigger = .risingEdge(level: scopeTriggerLevel)
+        case .falling: trigger = .fallingEdge(level: scopeTriggerLevel)
+        }
+
+        scopeRaw.removeAll(keepingCapacity: true)
+        scopeMetadata = nil
+        scopeArmedAt = Date()
+        if scope.activity != .waiting {
+            scope.activity = .waiting
+        }
+        writeScope(ScopeSettings(
+            trigger: trigger,
+            mode: scope.mode,
+            rangeIndex: index,
+            window: scope.window,
+            sampleCount: ScopeState.sampleCount
+        ))
+    }
+
+    /// Halfway between the extremes of the last capture, so that the trigger fires on
+    /// whatever signal is there without a level having to be dialled in on a watch.
+    private var scopeTriggerLevel: Float {
+        guard let capture = scope.capture, capture.mode == scope.mode, let summary = capture.summary else {
+            return 0
+        }
+        return Float((summary.minimum + summary.maximum) / 2)
+    }
+
+    private func handleScopeMetadata(_ data: Data) {
+        guard tool == .scope else { return }
+        noteScope("dso meta \(DiagnosticsLog.hex(data))")
+        guard let metadata = ScopeMetadata(data: data) else { return }
+        switch metadata.status {
+        case .done:
+            scopeMetadata = metadata
+            finishScopeCapture(givingUp: false)
+        case .error:
+            diagnostics.add("dso reports an error")
+            scopeRaw.removeAll(keepingCapacity: true)
+            scopeMetadata = nil
+            scope.activity = .failed
+        case .sampling, .bufferFull, .unknown:
+            break
+        }
+    }
+
+    private func handleScopeSamples(_ data: Data) {
+        guard tool == .scope, scope.activity == .waiting || scope.activity == .receiving,
+              let samples = SampleDecoder.samples(from: data) else { return }
+        scopeRaw.append(contentsOf: samples)
+        lastScopePacket = Date()
+        if scope.activity != .receiving {
+            scope.activity = .receiving
+        }
+        finishScopeCapture(givingUp: false)
+    }
+
+    /// Turns the collected samples into a capture once all of them are there.
+    ///
+    /// - Parameter givingUp: the samples stopped coming before the announced number was
+    ///   reached; show what arrived instead of waiting forever.
+    private func finishScopeCapture(givingUp: Bool) {
+        guard tool == .scope, let device, !scopeRaw.isEmpty else { return }
+        guard let metadata = scopeMetadata, metadata.scale.isFinite, metadata.scale != 0 else {
+            if givingUp {
+                // Samples that cannot be scaled are useless.
+                diagnostics.add("dso: \(scopeRaw.count) samples but no usable metadata")
+                scopeRaw.removeAll(keepingCapacity: true)
+                scope.activity = .failed
+            }
+            return
+        }
+        let isComplete = metadata.sampleCount > 0 && scopeRaw.count >= metadata.sampleCount
+        guard isComplete || givingUp else { return }
+        if isComplete {
+            noteScope("dso capture \(metadata.sampleCount) samples")
+        } else {
+            diagnostics.add("dso stalled at \(scopeRaw.count) of \(metadata.sampleCount) samples")
+        }
+
+        let count = isComplete ? metadata.sampleCount : scopeRaw.count
+        let values = scopeRaw.prefix(count).map { Double($0) * metadata.scale }
+        // The window covers the samples that were asked for. The rate the device reports is
+        // not used: the one capture from a Pokit Pro on record does not add up.
+        let window = Double(metadata.window > 0 ? metadata.window : scope.window) / 1_000_000
+        let perWindow = isComplete ? count : Int(ScopeState.sampleCount)
+        let rate = window > 0 ? Double(perWindow) / window : 0
+        let captureMode = MultimeterMode(rawValue: metadata.modeByte).flatMap {
+            ScopeSettings.modes.contains($0) ? $0 : nil
+        } ?? scope.mode
+        let summary = WaveformSummary(samples: values, sampleRate: rate)
+
+        scopeRaw.removeAll(keepingCapacity: true)
+        scopeMetadata = nil
+        scope.capture = ScopeCapture(
+            values: values,
+            sampleRate: rate,
+            mode: captureMode,
+            range: device.product.range(for: captureMode, index: metadata.rangeIndex),
+            summary: summary
+        )
+        scope.activity = .idle
+        consecutiveFailures = 0
+
+        if scope.range == .auto, let summary {
+            scopeAutoRange = ScopeRangeAdvisor.nextRange(
+                current: metadata.rangeIndex,
+                peak: max(abs(summary.minimum), abs(summary.maximum)),
+                ranges: device.product.ranges(for: captureMode)
+            )
+        }
+        if scope.isRunning {
+            // A short pause, so a fast time base does not turn the display into a flicker.
+            let rearm = DispatchWorkItem { [weak self] in
+                self?.armScope()
+            }
+            scopeRearm = rearm
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: rearm)
+        }
+    }
+
+    private func scopeTick(_ now: Date) {
+        switch scope.activity {
+        case .receiving:
+            if now.timeIntervalSince(lastScopePacket) > 1 {
+                finishScopeCapture(givingUp: true)
+            }
+        case .waiting:
+            // A capture without trigger arrives right after its window. With a trigger the
+            // wait is open-ended, and that is fine.
+            let expected = Double(scope.window) / 1_000_000 + 4
+            if scope.trigger == .off, now.timeIntervalSince(scopeArmedAt) > expected {
+                diagnostics.add("dso: no answer, asking again")
+                armScope()
+            }
+        case .idle, .failed:
+            // Safety net for a re-arm that got lost, and the retry after an error.
+            if scope.isRunning, scopeRearm == nil, now.timeIntervalSince(scopeArmedAt) > 2 {
+                armScope()
+            }
+        }
+    }
+
+    // MARK: Data logger
+
+    /// The Pokit Meter and the Pokit Pro use different layouts. What the device itself sent
+    /// is the best evidence; before that, the product decides.
+    private var loggerLayout: LoggerLayout {
+        logger.metadata?.layout ?? LoggerLayout(product: device?.product ?? .meter)
+    }
+
+    private func writeLogger(_ settings: LoggerSettings) {
+        guard let peripheral, let characteristic = characteristics[GATT.loggerSettings] else {
+            diagnostics.add("log write: no characteristic")
+            return
+        }
+        let data = settings.encoded(layout: loggerLayout)
+        diagnostics.add("log write \(DiagnosticsLog.hex(data))")
+        peripheral.writeValue(data, for: characteristic, type: writeType(for: characteristic))
+    }
+
+    private func readLoggerMetadata() {
+        guard phase == .ready, let peripheral, let characteristic = characteristics[GATT.loggerMetadata] else {
+            return
+        }
+        lastLoggerPoll = Date()
+        peripheral.readValue(for: characteristic)
+    }
+
+    private func readLoggerMetadata(after delay: TimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            self?.readLoggerMetadata()
+        }
+    }
+
+    private func handleLoggerMetadata(_ data: Data) {
+        guard let metadata = LoggerMetadata(data: data) else {
+            diagnostics.add("log meta unreadable \(DiagnosticsLog.hex(data))")
+            beginActivity(loggerIsSampling: false, because: "logger state unreadable")
+            return
+        }
+        if logger.metadata != metadata {
+            logger.metadata = metadata
+            diagnostics.add("log meta \(DiagnosticsLog.hex(data))")
+        }
+        let isSampling = metadata.status == .sampling
+        beginActivity(loggerIsSampling: isSampling, because: isSampling ? "logger is recording" : "logger idle")
+        if logger.isFetching {
+            loggerFetchMetadata = metadata
+            lastLoggerPacket = Date()
+            finishLogFetch(givingUp: false)
+        }
+    }
+
+    private func handleLoggerSamples(_ data: Data) {
+        guard logger.isFetching, let samples = SampleDecoder.samples(from: data) else { return }
+        loggerRaw.append(contentsOf: samples)
+        lastLoggerPacket = Date()
+        finishLogFetch(givingUp: false)
+    }
+
+    /// Turns the fetched samples into a log once all of them are there.
+    ///
+    /// - Parameter givingUp: nothing has arrived for a while; take what is there.
+    private func finishLogFetch(givingUp: Bool) {
+        guard logger.isFetching else { return }
+        guard let metadata = loggerFetchMetadata ?? (givingUp ? logger.metadata : nil) else {
+            if givingUp {
+                diagnostics.add("log fetch: no answer (\(loggerRaw.count) samples)")
+                loggerRaw.removeAll()
+                logger.isFetching = false
+            }
+            return
+        }
+        guard givingUp || loggerRaw.count >= metadata.sampleCount else { return }
+
+        let count = givingUp ? loggerRaw.count : metadata.sampleCount
+        diagnostics.add("log fetched \(loggerRaw.count) of \(metadata.sampleCount) samples")
+        let scale = metadata.scale.isFinite ? metadata.scale : 0
+        let values = loggerRaw.prefix(count).map { Double($0) * scale }
+        loggerRaw.removeAll()
+        loggerFetchMetadata = nil
+        logger.log = LoggedData(
+            values: values,
+            mode: metadata.mode,
+            interval: metadata.interval,
+            start: metadata.startDate,
+            summary: WaveformSummary(samples: values)
+        )
+        logger.isFetching = false
+    }
+
+    private func loggerTick(_ now: Date) {
+        if logger.isFetching {
+            if now.timeIntervalSince(lastLoggerPacket) > 3 {
+                finishLogFetch(givingUp: true)
+            }
+        } else if logger.isSampling, now.timeIntervalSince(lastLoggerPoll) > Timing.loggerPollInterval {
+            // Keeps the sample count on screen moving.
+            readLoggerMetadata()
+        }
+    }
+
+    // MARK: Multimeter readings
+
     private func handleReading(_ data: Data) {
         guard let reading = MultimeterReading(data: data), let device else { return }
         let now = Date()
 
         // Readings for another mode are leftovers from before a mode change, or the meter
         // reporting that it is idle.
-        guard reading.mode == mode, appIsActive else { return }
+        guard reading.mode == mode, appIsActive, tool == .meter else { return }
         lastMatchingReading = now
         consecutiveFailures = 0
         if !meter.isReceiving {
@@ -591,7 +1223,7 @@ final class PokitCentral: NSObject, ObservableObject {
 
     /// Runs once a second: setup timeout, battery polling and the reading watchdog.
     private func tick() {
-        guard isPoweredOn else { return }
+        guard isPoweredOn, appIsActive else { return }
         let now = Date()
 
         switch phase {
@@ -601,7 +1233,13 @@ final class PokitCentral: NSObject, ObservableObject {
             }
 
         case .ready:
-            guard appIsActive else { return }
+            if awaitingStartup {
+                if now > startupDeadline {
+                    // No answer about the logger: carry on as if it were not recording.
+                    beginActivity(loggerIsSampling: false, because: "no logger state in time")
+                }
+                return
+            }
             if now.timeIntervalSince(lastStatusPoll) > Timing.statusPollInterval {
                 pollStatus()
             }
@@ -610,6 +1248,19 @@ final class PokitCentral: NSObject, ObservableObject {
                 // Neither notifications nor read responses: the link is dead even though the
                 // system has not noticed yet.
                 restartConnection()
+                return
+            }
+            guard tool == .meter else {
+                if tool == .scope {
+                    scopeTick(now)
+                } else {
+                    loggerTick(now)
+                }
+                if now.timeIntervalSince(lastLinkActivity) > Timing.keepAliveInterval,
+                   now.timeIntervalSince(lastKeepAlive) > Timing.keepAliveInterval {
+                    lastKeepAlive = now
+                    pollStatus()
+                }
                 return
             }
             if now.timeIntervalSince(lastMatchingReading) > Timing.readingGap {
@@ -627,8 +1278,8 @@ final class PokitCentral: NSObject, ObservableObject {
             }
 
         case .connecting:
-            // A pending connection can be dropped without a callback while the app is
-            // suspended. Asking again is harmless when it is still pending.
+            // A connection request can get lost without a callback. Asking again is harmless
+            // when it is still pending.
             if now.timeIntervalSince(lastConnectCheck) > 5 {
                 lastConnectCheck = now
                 resume()
@@ -697,6 +1348,11 @@ private final class DemoMeter {
             let product: PokitProduct = scenario == "pro" ? .pro : .meter
             let name = product == .pro ? "PokitPro" : "PokitMeter"
             central.demoShowMeter(RememberedPokit(id: UUID(), name: name, product: product))
+            switch UserDefaults.standard.string(forKey: "PokitDemoTool") {
+            case "scope": central.open(.scope)
+            case "logger": central.open(.logger)
+            default: break
+            }
         }
         let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self, weak central] _ in
             guard let self, let central else { return }
@@ -705,6 +1361,40 @@ private final class DemoMeter {
         }
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
+    }
+
+    /// Fills the oscilloscope or the logger with made-up data.
+    func show(_ tool: Tool, central: PokitCentral) {
+        switch tool {
+        case .meter:
+            break
+        case .scope:
+            // Two and a half periods of a 5 V square wave with a bit of overshoot.
+            let count = Int(ScopeState.sampleCount)
+            let values = (0..<count).map { index -> Double in
+                let periods = Double(index) / Double(count) * 2.5
+                let position = periods - periods.rounded(.down)
+                let isHigh = position < 0.5
+                let sinceEdge = isHigh ? position : position - 0.5
+                let decay: Double = exp(-sinceEdge * 40)
+                let ring: Double = 0.6 * decay * cos(sinceEdge * 180)
+                return isHigh ? 5.0 + ring : 0.0 - ring
+            }
+            let rate = Double(count) / (Double(central.scope.window) / 1_000_000)
+            central.demoShowCapture(values: values, sampleRate: rate)
+        case .logger:
+            // A battery slowly running down, one sample every ten seconds.
+            let values = (0..<90).map { index -> Double in
+                let step = Double(index)
+                let slope: Double = 4.1 - step * 0.004
+                let wave: Double = 0.05 * sin(step / 6)
+                let noise: Double = 0.01 * sin(step * 1.7)
+                return slope - wave + noise
+            }
+            // `-PokitDemoScreen log` shows a finished recording instead of a running one.
+            let isSampling = UserDefaults.standard.string(forKey: "PokitDemoScreen") != "log"
+            central.demoShowLog(values: values, isSampling: isSampling)
+        }
     }
 
     /// A plausible reading for `mode`, with a little movement in the last digits.
@@ -779,6 +1469,41 @@ extension PokitCentral {
         guard phase == .ready else { return }
         handleReading(data)
     }
+
+    fileprivate func demoShowCapture(values: [Double], sampleRate: Double) {
+        let product = device?.product ?? .meter
+        scope.capture = ScopeCapture(
+            values: values,
+            sampleRate: sampleRate,
+            mode: scope.mode,
+            range: product.ranges(for: scope.mode).first { $0.fullScale >= 6 },
+            summary: WaveformSummary(samples: values, sampleRate: sampleRate)
+        )
+        scope.activity = .idle
+    }
+
+    fileprivate func demoShowLog(values: [Double], isSampling: Bool) {
+        // Metadata as a Pokit Pro sends it: status, scale, mode, range, interval (10 s),
+        // sample count, six unknown bytes, start time.
+        let start = UInt32(clamping: Int(Date().timeIntervalSince1970) - values.count * 10)
+        var raw = Data([isSampling ? 1 : 0, 0x39, 0xF0, 0x45, 0x3C, LoggerMode.dcVoltage.rawValue, 2])
+        raw.append(contentsOf: [0x10, 0x27, 0x00, 0x00])
+        raw.append(UInt8(truncatingIfNeeded: values.count))
+        raw.append(UInt8(truncatingIfNeeded: values.count >> 8))
+        raw.append(contentsOf: [0, 0, 0, 0, 0, 0])
+        raw.append(UInt8(truncatingIfNeeded: start))
+        raw.append(UInt8(truncatingIfNeeded: start >> 8))
+        raw.append(UInt8(truncatingIfNeeded: start >> 16))
+        raw.append(UInt8(truncatingIfNeeded: start >> 24))
+        logger.metadata = LoggerMetadata(data: raw)
+        logger.log = LoggedData(
+            values: values,
+            mode: .dcVoltage,
+            interval: 10,
+            start: Date(timeIntervalSince1970: TimeInterval(start)),
+            summary: WaveformSummary(samples: values)
+        )
+    }
 }
 
 // MARK: - CBCentralManagerDelegate
@@ -843,25 +1568,24 @@ extension PokitCentral: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        guard peripheral.identifier == self.peripheral?.identifier else {
+        // A connection that completes after the app left the screen is not wanted any more.
+        guard peripheral.identifier == self.peripheral?.identifier, appIsActive else {
             central.cancelPeripheralConnection(peripheral)
             return
         }
-        linkDown()
-        phase = .preparing
-        setupDeadline = Date().addingTimeInterval(Timing.setupTimeout)
-        peripheral.delegate = self
-        peripheral.discoverServices(GATT.services)
+        prepare(peripheral)
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         guard peripheral.identifier == self.peripheral?.identifier else { return }
+        diagnostics.add("connect failed: \(error?.localizedDescription ?? "no reason given")")
         linkDown()
         scheduleReconnect()
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         guard peripheral.identifier == self.peripheral?.identifier else { return }
+        diagnostics.add("disconnected\(error.map { ": \($0.localizedDescription)" } ?? "")")
         linkDown()
         scheduleReconnect()
     }
@@ -906,11 +1630,25 @@ extension PokitCentral: CBPeripheralDelegate {
         guard peripheral.identifier == self.peripheral?.identifier else { return }
         // Any answer, even an error, proves the link is alive.
         lastLinkActivity = Date()
-        guard error == nil, let data = characteristic.value else { return }
+        guard error == nil, let data = characteristic.value else {
+            if characteristic.uuid == GATT.loggerMetadata {
+                // The logger's state cannot be read; do not wait for it.
+                beginActivity(loggerIsSampling: false, because: "logger state not readable")
+            }
+            return
+        }
 
         switch characteristic.uuid {
         case GATT.reading:
             handleReading(data)
+        case GATT.dsoMetadata:
+            handleScopeMetadata(data)
+        case GATT.dsoReading:
+            handleScopeSamples(data)
+        case GATT.loggerMetadata:
+            handleLoggerMetadata(data)
+        case GATT.loggerReading:
+            handleLoggerSamples(data)
         case GATT.status:
             if let newStatus = DeviceStatus(data: data), newStatus != status {
                 status = newStatus
@@ -927,7 +1665,11 @@ extension PokitCentral: CBPeripheralDelegate {
         case GATT.buttonPress:
             // The button on the Pokit Pro doubles as a remote "hold" key.
             if ButtonEvent(data: data) == .pressed, phase == .ready, appIsActive {
-                toggleHold()
+                switch tool {
+                case .meter: toggleHold()
+                case .scope: toggleScopeRunning()
+                case .logger: break
+                }
             }
         case GATT.manufacturer:
             details.manufacturer = PokitText.decode(data)
@@ -953,11 +1695,25 @@ extension PokitCentral: CBPeripheralDelegate {
             // Only a real answer from the device counts; a write that fails because the link
             // dropped says nothing about the mode.
             let rejected = (error as? CBATTError) != nil && appIsActive
+            if let attError = error as? CBATTError {
+                diagnostics.add("mm write refused (ATT \(attError.code.rawValue))")
+            }
             if meter.modeWasRejected != rejected {
                 meter.modeWasRejected = rejected
             }
         } else if characteristic.uuid == GATT.torch, error != nil {
             peripheral.readValue(for: characteristic)
+        } else if characteristic.uuid == GATT.dsoSettings, let attError = error as? CBATTError {
+            diagnostics.add("dso write refused (ATT \(attError.code.rawValue))")
+            if tool == .scope, scope.activity == .waiting {
+                scope.activity = .failed
+            }
+        } else if characteristic.uuid == GATT.loggerSettings, let attError = error as? CBATTError {
+            diagnostics.add("log write refused (ATT \(attError.code.rawValue))")
+            if tool == .logger, !logger.isSampling, !logger.isFetching {
+                logger.startWasRejected = true
+            }
+            logger.isFetching = false
         }
     }
 

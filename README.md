@@ -12,16 +12,20 @@ and shows the reading on your wrist. The iPhone is only needed to install the ap
 <p>
   <img src="docs/screenshots/large-1-voltage.png" width="170" alt="DC voltage reading with auto-range and min/max">
   <img src="docs/screenshots/large-2-continuity.png" width="170" alt="Continuity: green screen while the circuit is closed">
+  <img src="docs/screenshots/large-8-scope.png" width="170" alt="Oscilloscope with a square wave, peak-to-peak and frequency">
   <img src="docs/screenshots/large-5-modes.png" width="170" alt="Mode picker">
-  <img src="docs/screenshots/large-4-list.png" width="170" alt="Device list">
 </p>
 
 <sub>Screenshots are rendered by CI in the watch simulator, using the app's built-in demo meter.</sub>
 
 ## What it does
 
-- Finds Pokit devices, remembers the one you picked and **reconnects on its own** whenever the
-  meter is switched on and in range.
+- Finds Pokit devices, remembers the one you picked and **reconnects on its own** when you open
+  the app with the meter switched on and in range.
+- Connected **only while the app is on screen**: leaving it stops the measurement and drops the
+  link, so the meter is not kept busy (or blocked for other apps) when nobody is looking.
+- **Complications** for the watch face and the Smart Stack, so the app is one tap away:
+  one that just opens it, and quick starts that open it straight in DC voltage or continuity.
 - Multimeter modes: DC/AC voltage, DC/AC current, resistance, continuity, diode, temperature,
   plus capacitance and external temperature on the Pokit Pro.
 - Auto-range or a fixed range; the display keeps the decimal point steady per range, like a
@@ -29,11 +33,16 @@ and shows the reading on your wrist. The iPhone is only needed to install the ap
 - **Continuity on the wrist**: haptic tap and a green screen while there is continuity
   (the Pokit itself has no beeper).
 - Hold (tap the value, or press the button on a Pokit Pro), running min/max.
+- **Oscilloscope**: DC/AC voltage and current over 1 ms to 1 s, free-running or triggered on
+  an edge, with peak-to-peak and frequency. The range follows the signal on its own.
+- **Data logger**: start a recording on the Pokit (voltage, current or temperature, every
+  1 s to 1 h), leave, and come back later to stop it and look at the result. The Pokit
+  records on its own; the watch does not have to stay connected.
 - Battery state, firmware and serial number, flash the LED (Meter), torch (Pro).
 - English and German.
 
-A watchdog looks after the connection: if readings stop, the app first asks the meter again and,
-if the link is really dead, reconnects from scratch.
+While the app is open a watchdog looks after the connection: if readings stop, the app first
+asks the meter again and, if the link is really dead, reconnects from scratch.
 
 ## Using it
 
@@ -41,13 +50,28 @@ if the link is really dead, reconnects from scratch.
 2. Tap your meter in the list. From then on the app connects to it automatically.
 3. Tap the mode line at the top to change the mode, the range button to change the range,
    the value (or the pause button) to hold. The battery icon opens the device page.
+4. The oscilloscope and the data logger are at the end of the mode list. In the oscilloscope,
+   tap the waveform to hold it and the left button for signal, range, time span and trigger.
+
+If something does not work, the device page (battery icon) has a *Diagnostics* entry at the
+bottom: a short record of what the app sent and what the meter answered. A screenshot of it
+says more than a description.
+
+Getting to it quickly:
+
+- **Watch face:** touch and hold the face, *Edit*, swipe to *Complications*, tap a slot and
+  pick one under *Wristmeter*: the plain one opens the app as you left it, *DC Voltage* and
+  *Continuity* open it in that mode.
+- **Smart Stack:** turn the Digital Crown up on the watch face, scroll to the end, *Edit*, **+**,
+  *Wristmeter*. Pin it to keep it at the top.
+- Or ask Siri to "open Wristmeter".
 
 Tips:
 
-- watchOS returns to the watch face after a while. To keep the meter in front, set
-  *Settings › General › Return to Clock › Wristmeter* to *After 1 hour* on the watch.
-- When the app goes to the background the meter is put into idle to save its battery;
-  measuring resumes when you raise your wrist.
+- With the wrist down the app stays in front, dimmed, and keeps measuring until watchOS
+  returns to the watch face (2 minutes by default). Then the meter is disconnected; opening
+  the app again reconnects. *Settings › General › Return to Clock › Wristmeter* on the watch
+  changes that time: longer keeps the reading in front, at the cost of the meter's battery.
 - Pokit Pro: the physical switch on the device decides which modes work. The app shows a hint
   if the selected mode does not match the switch.
 
@@ -72,6 +96,7 @@ pick your team for both targets and run the `PokitWatch` scheme on your iPhone/w
 |---|---|
 | `PokitKit/` | Swift package with the Pokit protocol: UUIDs, settings/reading/status encoding, range tables for Meter and Pro, value formatting. No Apple frameworks, so it is unit-tested on Linux too. |
 | `PokitWatch/` | The watchOS app (SwiftUI + CoreBluetooth). `Bluetooth/PokitCentral.swift` owns the connection. |
+| `PokitWidgets/` | WidgetKit extension with the complications. They only launch the app, optionally in a given mode. |
 | `PokitPhone/` | Minimal iOS host app. It exists because TestFlight delivers watch apps inside an iOS app. |
 | `project.yml` | [XcodeGen](https://github.com/yonaskolb/XcodeGen) definition; the Xcode project is generated, not committed. |
 | `.github/workflows/build.yml` | Tests and unsigned builds on every push. |
@@ -80,7 +105,8 @@ pick your team for both targets and run the `PokitWatch` scheme on your iPhone/w
 Run the protocol tests with `swift test --package-path PokitKit` (macOS or Linux).
 
 The simulator has no Bluetooth. To try the UI there, launch the watch app with the arguments
-`-PokitDemo meter` (or `pro`, or `list`); it then runs against a made-up meter. A push whose
+`-PokitDemo meter` (or `pro`, or `list`); it then runs against a made-up meter. Add
+`-PokitDemoTool scope` or `logger` for those screens. A push whose
 commit message contains `[screenshots]` makes CI commit fresh screenshots to `docs/screenshots`.
 
 ## Protocol notes
@@ -95,7 +121,10 @@ A few things worth knowing:
   characteristic; readings then arrive as notifications. Writing mode 0 (idle) stops it.
 - The status byte of a reading is an enum whose meaning depends on the mode (auto-range on/off,
   continuity yes/no, 255 = error).
-- Not implemented yet: oscilloscope (DSO) and data logger.
+- The oscilloscope and the data logger send their samples as raw 16-bit values over many
+  notifications; a Metadata characteristic carries the scale and the sample count.
+- The data logger's layout differs between Meter and Pro (interval in 16-bit seconds vs
+  32-bit milliseconds).
 
 The full byte-level reference, with sources, is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 

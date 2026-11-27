@@ -13,7 +13,8 @@ macOS-Runner von GitHub Actions, verteilt wird über TestFlight.
 | Dieses Repository auf GitHub | Öffentliche Repos haben kostenlose macOS-Runner. |
 
 Die Bundle-ID der App ist `io.github.dionho.pokitwatch` (Watch-App:
-`io.github.dionho.pokitwatch.watchkitapp`). Wer das Projekt forkt, braucht eine eigene ID:
+`io.github.dionho.pokitwatch.watchkitapp`, deren Komplikationen:
+`io.github.dionho.pokitwatch.watchkitapp.widgets`). Wer das Projekt forkt, braucht eine eigene ID:
 entweder `APP_BUNDLE_ID` in `project.yml` ändern oder im Repo eine Actions-Variable
 `APP_BUNDLE_ID` anlegen.
 
@@ -32,6 +33,8 @@ Privatperson („Individual") dauert die Freischaltung meist wenige Stunden bis 
 1. Description `Wristmeter`, Bundle ID *Explicit*: `io.github.dionho.pokitwatch`
 2. Noch einmal für die Watch-App: Description `Wristmeter Watch App`, Bundle ID
    `io.github.dionho.pokitwatch.watchkitapp`
+3. Und für die Komplikationen: Description `Wristmeter Widgets`, Bundle ID
+   `io.github.dionho.pokitwatch.watchkitapp.widgets`
 
 Capabilities müssen keine angehakt werden (Bluetooth braucht keine).
 
@@ -108,6 +111,9 @@ Interne Tests brauchen keine Prüfung durch Apple.
    für die Apple Watch verwenden.)
 3. Auf der Uhr **Wristmeter** öffnen, Bluetooth-Zugriff erlauben, Pokit einschalten und in der
    Liste antippen.
+4. Damit die App schnell zur Hand ist: Zifferblatt gedrückt halten › *Bearbeiten* ›
+   *Komplikationen* › Platz antippen › *Wristmeter*. Oder im Smart-Stapel (Krone auf dem
+   Zifferblatt nach oben drehen) ganz unten *Bearbeiten* › **+** › *Wristmeter*.
 
 ## Danach
 
@@ -127,7 +133,7 @@ die vollständigen Logs zusätzlich als Artefakt `testflight-logs` angehängt.
 |---|---|
 | `Repository secret for … is missing` | Secret aus Schritt 5 fehlt oder ist falsch benannt. |
 | `does not look like a .p8 key` | In `APPSTORE_PRIVATE_KEY` fehlt ein Teil der Datei. Komplett neu einfügen. |
-| `No profiles for '…' were found` / `No signing certificate` | Der API-Schlüssel hat nicht die Rolle Admin, oder die Bundle-IDs aus Schritt 2 fehlen. |
+| `No profiles for '…' were found` / `No signing certificate` | Der API-Schlüssel hat nicht die Rolle Admin, oder eine der drei Bundle-IDs aus Schritt 2 fehlt. |
 | `No suitable application records were found` | Schritt 3 fehlt, oder die Bundle-ID der App passt nicht. |
 | `The bundle version must be higher than the previously uploaded version` | Sollte durch den Zeitstempel nicht vorkommen; Workflow einfach neu starten. |
 | Build erscheint nicht in TestFlight | Verarbeitung abwarten; Apple schickt bei Problemen eine E-Mail an die Apple-ID. |

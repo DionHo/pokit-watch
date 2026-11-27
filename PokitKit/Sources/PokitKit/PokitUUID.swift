@@ -31,6 +31,26 @@ public enum PokitUUID {
     /// Read + notify. 7 bytes: status, value, mode, range.
     public static let multimeterReading = "047D3559-8BEE-423A-B229-4417FA603B90"
 
+    // MARK: Oscilloscope (DSO) service
+
+    public static let dsoService = "1569801E-1425-4A7A-B617-A4F4ED719DE6"
+    /// Write. 13 bytes: command, trigger level, mode, range, sampling window, sample count.
+    public static let dsoSettings = "A81AF1B6-B8B3-4244-8859-3DA368D2BE39"
+    /// Read + notify. Status, scale and size of the capture that follows.
+    public static let dsoMetadata = "970F00BA-F46F-4825-96A8-153A5CD0CDA9"
+    /// Notify. The capture, as raw 16-bit samples spread over several notifications.
+    public static let dsoReading = "98E14F8E-536E-4F24-B4F4-1DEBFED0A99E"
+
+    // MARK: Data logger service
+
+    public static let loggerService = "A5FF3566-1FD8-4E10-8362-590A578A4121"
+    /// Write. Start, stop or fetch; 11 bytes on the Pokit Meter, 13 on the Pokit Pro.
+    public static let loggerSettings = "5F97C62B-A83B-46C6-B9CD-CAC59E130A78"
+    /// Read + notify. Status, scale, interval, sample count and start time of the log.
+    public static let loggerMetadata = "9ACADA2E-3936-430B-A8F7-DA407D97CA6E"
+    /// Notify. The logged samples, raw 16-bit values spread over several notifications.
+    public static let loggerReading = "3C669DAB-FC86-411C-9498-4F9415049CC0"
+
     // MARK: Device Information service (Bluetooth SIG)
 
     public static let deviceInformationService = "180A"

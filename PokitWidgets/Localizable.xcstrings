@@ -1,0 +1,66 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Continuity": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Durchgang"
+          }
+        }
+      }
+    },
+    "DC Voltage": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gleichspannung"
+          }
+        }
+      }
+    },
+    "Opens Wristmeter in this mode.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet Wristmeter in diesem Modus."
+          }
+        }
+      }
+    },
+    "Opens the multimeter.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet das Multimeter."
+          }
+        }
+      }
+    },
+    "Tap to measure": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zum Messen tippen"
+          }
+        }
+      }
+    },
+    "Wristmeter": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wristmeter"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

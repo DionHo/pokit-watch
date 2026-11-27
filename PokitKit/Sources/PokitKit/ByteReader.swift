@@ -28,6 +28,10 @@ struct ByteReader {
             | UInt32(bytes[offset + 3]) << 24
     }
 
+    func int16(at offset: Int) -> Int16 {
+        Int16(bitPattern: uint16(at: offset))
+    }
+
     func float32(at offset: Int) -> Float {
         Float(bitPattern: uint32(at: offset))
     }
@@ -38,6 +42,15 @@ struct ByteReader {
 }
 
 extension Data {
+    mutating func appendLittleEndian(_ value: UInt16) {
+        append(UInt8(truncatingIfNeeded: value))
+        append(UInt8(truncatingIfNeeded: value >> 8))
+    }
+
+    mutating func appendLittleEndian(_ value: Float) {
+        appendLittleEndian(value.bitPattern)
+    }
+
     mutating func appendLittleEndian(_ value: UInt32) {
         append(UInt8(truncatingIfNeeded: value))
         append(UInt8(truncatingIfNeeded: value >> 8))

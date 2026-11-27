@@ -1,9 +1,9 @@
 # Pokit Meter / Pokit Pro BLE protocol reference
 
 A byte-level reference for the Pokit Bluetooth protocol, compiled from the sources below.
-`PokitKit` implements the Status and Multimeter parts; the oscilloscope (DSO) and data logger
-sections are here for whoever adds those. Nothing in this file was verified against a device
-by this project: where the sources disagree or are silent, it says so.
+`PokitKit` implements the Status, Multimeter, oscilloscope (DSO) and data logger parts.
+Nothing in this file was verified against a device by this project: where the sources
+disagree or are silent, it says so.
 
 Citation key:
 
@@ -445,7 +445,7 @@ Command: 0 Start, 1 Stop, 2 Refresh. Mode: 0 Idle, 1 DC V, 2 AC V, 3 DC A, 4 AC 
 - Write type (with/without response) per characteristic: only inferable that the Settings write is used with response; no source lists the characteristic properties bitfield beyond "Write".
 - Minimum/maximum multimeter update interval; behaviour at very short intervals; whether the device keeps notifying after the client disconnects/reconnects (device state after disconnect, auto-idle).
 - Overload / out-of-range signalling in the Reading (no flag defined; possible +Inf value or status 255, unverified). No polarity flag defined.
-- What the Pro does when the requested mode/range disagrees with the physical switch position (Status byte 6), and which modes/ranges are valid per switch position. (Not in dokit, JS, or PDF.)
+- Which modes/ranges the Pro accepts in which position of its physical switch (Status byte 6). (Not in dokit, JS, or PDF.) Observed on the owner's Pokit Pro (2026-11-27, reported in words, no byte capture): a Settings write for a mode that does not suit the switch gets an ATT error (code not recorded); the same write is accepted once the switch has been moved to a suitable position; moving the switch during a running measurement is reflected in Status, and the measurement carries on when the switch is back.
 - Meaning of the Status "Low" battery threshold; calibrated unit of battery voltage beyond "volts"; Status length 7 (parser accepts; never observed) and lengths > 8.
 - Button Press byte 0 meaning; the two unknown Pro Status-service characteristics; Calibration Get/Set Param layouts; OTA service protocol; unknown services listed in section 2.8.
 - Whether the Meter supports Capacitance/External Temperature; whether Pro status values exist for capacitance/external temperature modes (Status enum has no such values).

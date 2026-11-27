@@ -36,10 +36,7 @@ struct MeterView: View {
         .background(backgroundColor)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                NavigationLink(value: Route.device) {
-                    Image(systemName: batterySymbol)
-                }
-                .accessibilityLabel(Text("Device"))
+                DeviceLink()
             }
         }
         .sheet(isPresented: $showsModes) {
@@ -190,22 +187,6 @@ struct MeterView: View {
             return "AUTO"
         case .fixed(let index):
             return pokit.device?.product.range(for: pokit.mode, index: index)?.label(unit: pokit.mode.unit) ?? "–"
-        }
-    }
-
-    private var batterySymbol: String {
-        guard pokit.phase == .ready, let status = pokit.status, let product = pokit.device?.product else {
-            return "info.circle"
-        }
-        if status.chargingStatus == .charging {
-            return "battery.100percent.bolt"
-        }
-        switch status.estimatedBatteryLevel(for: product) {
-        case ..<0.15: return "battery.0percent"
-        case ..<0.4: return "battery.25percent"
-        case ..<0.65: return "battery.50percent"
-        case ..<0.9: return "battery.75percent"
-        default: return "battery.100percent"
         }
     }
 
