@@ -24,7 +24,7 @@ settings:
     # Change these two if you fork the project: the bundle ID must be unique to your
     # Apple Developer account. The watch app's ID must start with the host app's ID.
     APP_BUNDLE_ID: io.github.dionho.pokitwatch
-    MARKETING_VERSION: "0.2.0"
+    MARKETING_VERSION: "0.3.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
