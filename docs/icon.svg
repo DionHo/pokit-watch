@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
+      <stop offset="0" stop-color="#1d2733"/>
+      <stop offset="1" stop-color="#0a0e13"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <!-- gauge arc -->
+  <path d="M 232 668 A 330 330 0 1 1 792 668" fill="none" stroke="#2f3d4d" stroke-width="54" stroke-linecap="round"/>
+  <path d="M 232 668 A 330 330 0 0 1 648 214" fill="none" stroke="#ffc400" stroke-width="54" stroke-linecap="round"/>
+  <!-- waveform -->
+  <polyline points="262,520 392,520 446,404 520,640 592,452 632,520 762,520" fill="none" stroke="#ffffff" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- probe tips -->
+  <circle cx="392" cy="800" r="40" fill="#ff453a"/>
+  <circle cx="632" cy="800" r="40" fill="#f2f2f7"/>
+</svg>

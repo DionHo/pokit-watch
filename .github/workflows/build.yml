@@ -1,0 +1,204 @@
+name: Build
+
+# Compiles and tests everything without any signing. Runs on every push so a broken
+# build is noticed before trying to ship to TestFlight.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Branches of this repository are built by their push; the pull_request event is only
+  # needed for pull requests from forks. The condition avoids building everything twice.
+  core-tests:
+    name: PokitKit tests (Linux)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    container: swift:6.2-noble
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run protocol tests
+        run: swift test --package-path PokitKit
+
+  apple-build:
+    name: Watch + host app (Xcode)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep -iE "watch|iphone" || true
+
+      - name: Run protocol tests (macOS)
+        run: swift test --package-path PokitKit
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build for simulators (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project PokitWatch.xcodeproj \
+            -scheme PokitWatch \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee "$RUNNER_TEMP/build.log" | grep -E "error|warning:|failed|FAILED|SUCCEEDED" || true
+          grep -q "BUILD SUCCEEDED" "$RUNNER_TEMP/build.log"
+
+      - name: Archive for devices (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project PokitWatch.xcodeproj \
+            -scheme PokitWatch \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/PokitWatch.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee "$RUNNER_TEMP/archive.log" | grep -E "error|warning:|failed|FAILED|SUCCEEDED" || true
+          grep -q "ARCHIVE SUCCEEDED" "$RUNNER_TEMP/archive.log"
+
+      - name: Check that the watch app is embedded
+        run: |
+          APP="$RUNNER_TEMP/PokitWatch.xcarchive/Products/Applications/Pokit Watch.app"
+          find "$RUNNER_TEMP/PokitWatch.xcarchive/Products" -maxdepth 4 -name "*.app" -print
+          test -d "$APP/Watch/Pokit.app"
+          test -d "$APP/Watch/Pokit.app/de.lproj"
+          test -f "$APP/Watch/Pokit.app/PrivacyInfo.xcprivacy"
+          /usr/libexec/PlistBuddy -c "Print" "$APP/Watch/Pokit.app/Info.plist"
+
+      # For installing without the Apple Developer Program: tools such as WatchBridge or
+      # Sideloadly re-sign this package with a personal Apple ID (valid for 7 days).
+      # It gets its own bundle ID so that such an install never collides with the
+      # identifiers used for TestFlight.
+      - name: Package an unsigned IPA
+        run: |
+          SRC="$RUNNER_TEMP/PokitWatch.xcarchive/Products/Applications/Pokit Watch.app"
+          WORK="$RUNNER_TEMP/sideload"
+          mkdir -p "$WORK/Payload"
+          cp -R "$SRC" "$WORK/Payload/"
+          APP="$WORK/Payload/Pokit Watch.app"
+          ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist").sideload"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $ID" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $ID.watchkitapp" "$APP/Watch/Pokit.app/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :WKCompanionAppBundleIdentifier $ID" "$APP/Watch/Pokit.app/Info.plist"
+          (cd "$WORK" && zip -qry "$RUNNER_TEMP/PokitWatch-unsigned.ipa" Payload)
+          unzip -l "$RUNNER_TEMP/PokitWatch-unsigned.ipa" | grep -E "Info.plist|Pokit$|Pokit Watch$" || true
+          ls -la "$RUNNER_TEMP/PokitWatch-unsigned.ipa"
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v5
+        with:
+          name: PokitWatch-unsigned-ipa
+          path: ${{ runner.temp }}/PokitWatch-unsigned.ipa
+          if-no-files-found: error
+
+      # The simulator has no Bluetooth, so the app runs against its built-in demo meter.
+      # This is the only place the UI gets rendered without a real watch.
+      - name: Screenshots from the watch simulator
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          APP="$RUNNER_TEMP/dd/Build/Products/Debug-watchsimulator/Pokit.app"
+          BUNDLE=io.github.dionho.pokitwatch.watchkitapp
+          OUT="$RUNNER_TEMP/screenshots"
+          mkdir -p "$OUT"
+          xcrun simctl list devices available | grep -i "Apple Watch" || true
+
+          pick() {
+            for size in "$@"; do
+              udid=$(xcrun simctl list devices available | grep -E "Apple Watch.*\(${size}\)" | head -1 \
+                | grep -oE "[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}" || true)
+              if [ -n "$udid" ]; then echo "$udid"; return; fi
+            done
+          }
+          shoot() {
+            local udid="$1" name="$2"
+            shift 2
+            xcrun simctl terminate "$udid" "$BUNDLE" 2>/dev/null || true
+            xcrun simctl launch "$udid" "$BUNDLE" "$@"
+            sleep 6
+            xcrun simctl io "$udid" screenshot "$OUT/$name.png"
+          }
+
+          SMALL=$(pick 40mm 41mm 42mm)
+          LARGE=$(pick 46mm 45mm 44mm)
+          for entry in "small:$SMALL" "large:$LARGE"; do
+            label="${entry%%:*}"
+            udid="${entry#*:}"
+            [ -n "$udid" ] || continue
+            xcrun simctl boot "$udid"
+            xcrun simctl bootstatus "$udid" -b
+            xcrun simctl install "$udid" "$APP"
+            shoot "$udid" "$label-1-voltage" -PokitDemo meter -meter.mode 1
+            shoot "$udid" "$label-2-continuity" -PokitDemo meter -meter.mode 7
+            shoot "$udid" "$label-3-resistance-pro-de" -PokitDemo pro -meter.mode 5 -AppleLanguages "(de)"
+            shoot "$udid" "$label-4-list" -PokitDemo list
+            shoot "$udid" "$label-5-modes" -PokitDemo pro -meter.mode 1 -PokitDemoScreen modes
+            shoot "$udid" "$label-6-ranges-de" -PokitDemo meter -meter.mode 5 -PokitDemoScreen ranges -AppleLanguages "(de)"
+            shoot "$udid" "$label-7-device" -PokitDemo pro -PokitDemoScreen device
+            xcrun simctl shutdown "$udid"
+          done
+          ls -la "$OUT"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: screenshots
+          path: ${{ runner.temp }}/screenshots
+          if-no-files-found: ignore
+
+      - name: Keep build logs
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: build-logs
+          path: |
+            ${{ runner.temp }}/build.log
+            ${{ runner.temp }}/archive.log
+          if-no-files-found: ignore
+
+  # Opt-in: a push whose commit message contains "[screenshots]" gets the fresh simulator
+  # screenshots committed back to the same branch, where the README picks them up.
+  publish-screenshots:
+    name: Commit screenshots
+    needs: apple-build
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[screenshots]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: screenshots
+          path: docs/screenshots
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots
+          if git diff --cached --quiet; then
+            echo "Screenshots unchanged."
+            exit 0
+          fi
+          git commit -m "Update simulator screenshots [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+

@@ -1,0 +1,109 @@
+# XcodeGen project definition. The .xcodeproj is generated from this file
+# (`xcodegen generate`) and is not committed.
+#
+# Layout: a minimal iOS host app with the real app, the watchOS app, embedded in it.
+# A watch-only archive would be simpler, but current Xcode versions refuse to export
+# those for App Store Connect / TestFlight, so the conventional host + watch layout is used.
+# The watch app still runs fully on its own (WKRunsIndependentlyOfCompanionApp).
+name: PokitWatch
+
+options:
+  bundleIdPrefix: io.github.dionho
+  deploymentTarget:
+    iOS: "17.0"
+    watchOS: "10.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  developmentLanguage: en
+
+settings:
+  base:
+    # Change these two if you fork the project: the bundle ID must be unique to your
+    # Apple Developer account. The watch app's ID must start with the host app's ID.
+    APP_BUNDLE_ID: io.github.dionho.pokitwatch
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: "YES"
+    DEAD_CODE_STRIPPING: "YES"
+
+packages:
+  PokitKit:
+    path: PokitKit
+
+targets:
+  # iOS host app. It only explains that the app lives on the watch.
+  PokitWatch:
+    type: application
+    platform: iOS
+    sources:
+      - path: PokitPhone
+    dependencies:
+      - target: PokitWatchApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
+        PRODUCT_NAME: Pokit Watch
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    info:
+      path: PokitPhone/Info.plist
+      properties:
+        CFBundleDisplayName: Pokit Watch
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        ITSAppUsesNonExemptEncryption: false
+
+  # The actual app.
+  PokitWatchApp:
+    type: application
+    platform: watchOS
+    sources:
+      - path: PokitWatch
+    dependencies:
+      - package: PokitKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).watchkitapp
+        PRODUCT_NAME: Pokit
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    info:
+      path: PokitWatch/Info.plist
+      properties:
+        CFBundleDisplayName: Pokit
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: $(APP_BUNDLE_ID)
+        WKRunsIndependentlyOfCompanionApp: true
+        NSBluetoothAlwaysUsageDescription: Pokit connects to your Pokit Meter or Pokit Pro over Bluetooth to show its measurements.
+        # Keeps the link to the meter alive across short wrist-downs (watchOS 9+, Series 6+).
+        UIBackgroundModes:
+          - bluetooth-central
+        ITSAppUsesNonExemptEncryption: false
+
+schemes:
+  PokitWatch:
+    build:
+      targets:
+        PokitWatch: all
+        PokitWatchApp: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  PokitWatchApp:
+    build:
+      targets:
+        PokitWatchApp: all
+    run:
+      config: Debug
+    archive:
+      config: Release
