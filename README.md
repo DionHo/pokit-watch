@@ -96,6 +96,8 @@ A few things worth knowing:
   continuity yes/no, 255 = error).
 - Not implemented yet: oscilloscope (DSO) and data logger.
 
+The full byte-level reference, with sources, is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
+
 ## Credits
 
 - [dokit](https://github.com/pcolby/dokit) by Paul Colby for the protocol documentation.
