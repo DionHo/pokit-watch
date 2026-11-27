@@ -147,3 +147,31 @@ jobs:
             ${{ runner.temp }}/build.log
             ${{ runner.temp }}/archive.log
           if-no-files-found: ignore
+
+  # Opt-in: a push whose commit message contains "[screenshots]" gets the fresh simulator
+  # screenshots committed back to the same branch, where the README picks them up.
+  publish-screenshots:
+    name: Commit screenshots
+    needs: apple-build
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[screenshots]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: screenshots
+          path: docs/screenshots
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots
+          if git diff --cached --quiet; then
+            echo "Screenshots unchanged."
+            exit 0
+          fi
+          git commit -m "Update simulator screenshots [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
