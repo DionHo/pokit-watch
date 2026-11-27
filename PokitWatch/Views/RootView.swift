@@ -28,7 +28,7 @@ struct RootView: View {
                     NoticeView(
                         symbol: "hand.raised.fill",
                         title: "Bluetooth not allowed",
-                        message: "Allow Bluetooth for Pokit under Settings › Privacy & Security › Bluetooth."
+                        message: "Allow Bluetooth for Wristmeter under Settings › Privacy & Security › Bluetooth."
                     )
                 case .unsupported:
                     NoticeView(

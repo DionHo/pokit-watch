@@ -31,12 +31,12 @@
         }
       }
     },
-    "Allow Bluetooth for Pokit under Settings › Privacy & Security › Bluetooth.": {
+    "Allow Bluetooth for Wristmeter under Settings › Privacy & Security › Bluetooth.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erlaube Bluetooth für Pokit unter Einstellungen › Datenschutz & Sicherheit › Bluetooth."
+            "value": "Erlaube Bluetooth für Wristmeter unter Einstellungen › Datenschutz & Sicherheit › Bluetooth."
           }
         }
       }
