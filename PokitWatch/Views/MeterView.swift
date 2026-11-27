@@ -10,14 +10,16 @@ struct MeterView: View {
     @State private var showsRanges = UserDefaults.standard.string(forKey: "PokitDemoScreen") == "ranges"
 
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 0) {
             modeButton
             if pokit.phase == .ready {
-                Spacer(minLength: 0)
                 valueBlock
-                Spacer(minLength: 0)
                 infoLine
+                    .padding(.top, 2)
                 controls
+                    .padding(.top, 5)
+                    // Keeps the pills clear of the rounded display corners.
+                    .padding(.horizontal, 16)
             } else {
                 Spacer(minLength: 0)
                 ConnectionStatusView()
@@ -25,7 +27,11 @@ struct MeterView: View {
             }
         }
         .padding(.horizontal, 6)
+        .padding(.bottom, 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // The bottom safe area is a third of a small screen. The controls are compact pills
+        // that fit into it, which leaves the room for a large value.
+        .ignoresSafeArea(.container, edges: .bottom)
         .background(backgroundColor)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -69,18 +75,21 @@ struct MeterView: View {
     }
 
     private var valueBlock: some View {
-        VStack(spacing: -2) {
+        VStack(spacing: 0) {
+            // Takes all the height that is left and scales the digits to fill it.
             Text(verbatim: meter.display.value.number)
-                .font(.system(size: 58, weight: .semibold, design: .rounded))
+                .font(.system(size: 72, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .lineLimit(1)
-                .minimumScaleFactor(0.35)
+                .minimumScaleFactor(0.25)
                 .foregroundStyle(valueColor)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             Text(verbatim: meter.display.value.unit)
-                .font(.title3.weight(.medium))
+                .font(.system(size: 19, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
+                .padding(.top, -5)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture {
             pokit.toggleHold()
@@ -128,23 +137,18 @@ struct MeterView: View {
                     showsRanges = true
                 } label: {
                     Text(verbatim: rangeText)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(PillButtonStyle())
             }
             Button {
                 pokit.toggleHold()
             } label: {
                 Image(systemName: meter.isHolding ? "play.fill" : "pause.fill")
-                    .frame(maxWidth: pokit.mode.hasRanges ? nil : .infinity)
             }
-            .tint(meter.isHolding ? .yellow : nil)
+            .buttonStyle(PillButtonStyle(tint: meter.isHolding ? .yellow : .white))
+            .frame(maxWidth: pokit.mode.hasRanges ? 52 : .infinity)
             .accessibilityLabel(Text("Hold"))
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .font(.footnote)
     }
 
     // MARK: Derived values
@@ -201,6 +205,25 @@ struct MeterView: View {
 
     private func short(_ value: Double) -> String {
         MeterDisplay.format(value, mode: pokit.mode).text
+    }
+}
+
+/// Compact capsule button for the bottom row. The system's bordered buttons are about
+/// 44 pt high, which is too much next to a value that should be as large as possible.
+struct PillButtonStyle: ButtonStyle {
+    var tint: Color = .white
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 14, weight: .semibold, design: .rounded))
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .foregroundStyle(tint)
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity)
+            .frame(height: 30)
+            .background(tint.opacity(configuration.isPressed ? 0.4 : 0.22), in: Capsule())
+            .contentShape(Capsule())
     }
 }
 

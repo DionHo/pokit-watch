@@ -8,6 +8,15 @@ on your wrist. The iPhone is only needed to install the app.
 > Unofficial project, not affiliated with Pokit Innovations. Measuring mains or other dangerous
 > voltages is at your own risk; the watch is a display, not a safety device.
 
+<p>
+  <img src="docs/screenshots/large-1-voltage.png" width="170" alt="DC voltage reading with auto-range and min/max">
+  <img src="docs/screenshots/large-2-continuity.png" width="170" alt="Continuity: green screen while the circuit is closed">
+  <img src="docs/screenshots/large-5-modes.png" width="170" alt="Mode picker">
+  <img src="docs/screenshots/large-4-list.png" width="170" alt="Device list">
+</p>
+
+<sub>Screenshots are rendered by CI in the watch simulator, using the app's built-in demo meter.</sub>
+
 ## What it does
 
 - Finds Pokit devices, remembers the one you picked and **reconnects on its own** whenever the
@@ -63,6 +72,10 @@ pick your team for both targets and run the `PokitWatch` scheme on your iPhone/w
 | `.github/workflows/testflight.yml` | Manual: sign and upload to TestFlight. |
 
 Run the protocol tests with `swift test --package-path PokitKit` (macOS or Linux).
+
+The simulator has no Bluetooth. To try the UI there, launch the watch app with the arguments
+`-PokitDemo meter` (or `pro`, or `list`); it then runs against a made-up meter. A push whose
+commit message contains `[screenshots]` makes CI commit fresh screenshots to `docs/screenshots`.
 
 ## Protocol notes
 
