@@ -142,7 +142,9 @@ final class PokitCentral: NSObject, ObservableObject {
     }
 
     private let defaults = UserDefaults.standard
-    private var central: CBCentralManager!
+    /// `nil` only in demo mode, which runs without Bluetooth.
+    private var central: CBCentralManager?
+    private var demo: DemoMeter?
     /// The peripheral for `device`. Core Bluetooth does not retain peripherals, so this must.
     private var peripheral: CBPeripheral?
     private var seenPeripherals: [UUID: CBPeripheral] = [:]
@@ -171,6 +173,11 @@ final class PokitCentral: NSObject, ObservableObject {
         meter.reset(for: mode)
         device = loadRememberedDevice()
 
+        if let scenario = defaults.string(forKey: DemoMeter.argument) {
+            startDemo(scenario)
+            return
+        }
+
         central = CBCentralManager(delegate: self, queue: nil)
 
         let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
@@ -184,11 +191,15 @@ final class PokitCentral: NSObject, ObservableObject {
         housekeeping?.invalidate()
     }
 
+    private var isPoweredOn: Bool {
+        central?.state == .poweredOn
+    }
+
     // MARK: Intents
 
     /// Starts looking for Pokit devices. Safe to call repeatedly.
     func startScanning() {
-        guard central.state == .poweredOn else { return }
+        guard isPoweredOn, let central else { return }
         if !central.isScanning {
             central.scanForPeripherals(withServices: [GATT.statusMeter, GATT.statusPro], options: nil)
         }
@@ -205,6 +216,10 @@ final class PokitCentral: NSObject, ObservableObject {
     }
 
     func connect(to found: DiscoveredPokit) {
+        if let demo {
+            demo.connect(to: found, central: self)
+            return
+        }
         remember(RememberedPokit(id: found.id, name: found.name, product: found.product))
         meter.reset(for: mode)
         beginConnection()
@@ -212,6 +227,10 @@ final class PokitCentral: NSObject, ObservableObject {
 
     /// Disconnects and forgets the device, then goes back to scanning.
     func forgetDevice() {
+        if let demo {
+            demo.showList(central: self)
+            return
+        }
         let old = peripheral
         if phase == .ready {
             write(.idle)
@@ -226,7 +245,7 @@ final class PokitCentral: NSObject, ObservableObject {
         if let old {
             // A moment for the idle command to go out before the link is closed.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.central.cancelPeripheralConnection(old)
+                self?.central?.cancelPeripheralConnection(old)
             }
         }
         if appIsActive {
@@ -317,7 +336,7 @@ final class PokitCentral: NSObject, ObservableObject {
     /// Makes sure whatever should be happening is happening: connecting to the remembered
     /// device, or scanning when there is none.
     private func resume() {
-        guard central.state == .poweredOn else { return }
+        guard isPoweredOn else { return }
         if device != nil {
             if peripheral == nil || peripheral?.state == .disconnected {
                 beginConnection()
@@ -328,7 +347,7 @@ final class PokitCentral: NSObject, ObservableObject {
     }
 
     private func beginConnection() {
-        guard central.state == .poweredOn, let device else { return }
+        guard isPoweredOn, let central, let device else { return }
 
         let candidate: CBPeripheral?
         if let current = peripheral, current.identifier == device.id {
@@ -356,7 +375,7 @@ final class PokitCentral: NSObject, ObservableObject {
     }
 
     private func stopScanning() {
-        if central.state == .poweredOn, central.isScanning {
+        if isPoweredOn, let central, central.isScanning {
             central.stopScan()
         }
     }
@@ -366,7 +385,7 @@ final class PokitCentral: NSObject, ObservableObject {
         guard let peripheral else { return }
         linkDown()
         phase = .connecting
-        central.cancelPeripheralConnection(peripheral)
+        central?.cancelPeripheralConnection(peripheral)
         // The disconnect callback normally triggers the reconnect; this covers the cases
         // where it does not arrive (e.g. cancelling a connection that was still pending).
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
@@ -516,7 +535,7 @@ final class PokitCentral: NSObject, ObservableObject {
 
     /// Runs once a second: setup timeout, battery polling and the reading watchdog.
     private func tick() {
-        guard central.state == .poweredOn else { return }
+        guard isPoweredOn else { return }
         let now = Date()
 
         switch phase {
@@ -581,6 +600,120 @@ final class PokitCentral: NSObject, ObservableObject {
             defaults.removeObject(forKey: Keys.deviceName)
             defaults.removeObject(forKey: Keys.deviceProduct)
         }
+    }
+}
+
+// MARK: - Demo mode
+
+/// A made-up meter for the simulator, which has no Bluetooth. Launch the app with
+/// `-PokitDemo meter`, `-PokitDemo pro` or `-PokitDemo list` to try the UI or take screenshots;
+/// add `-meter.mode 7` (a `MultimeterMode` raw value) to start in a particular mode and
+/// `-PokitDemoScreen modes|ranges|device` to open one of the sub-screens right away.
+private final class DemoMeter {
+    static let argument = "PokitDemo"
+
+    private var timer: Timer?
+    private var step = 0
+
+    func connect(to found: DiscoveredPokit, central: PokitCentral) {
+        central.demoShowMeter(RememberedPokit(id: found.id, name: found.name, product: found.product))
+    }
+
+    func showList(central: PokitCentral) {
+        central.demoShowList([
+            DiscoveredPokit(id: UUID(), name: "PokitMeter", product: .meter, rssi: -58),
+            DiscoveredPokit(id: UUID(), name: "PokitPro", product: .pro, rssi: -81),
+        ])
+    }
+
+    func start(scenario: String, central: PokitCentral) {
+        if scenario == "list" {
+            showList(central: central)
+        } else {
+            let product: PokitProduct = scenario == "pro" ? .pro : .meter
+            let name = product == .pro ? "PokitPro" : "PokitMeter"
+            central.demoShowMeter(RememberedPokit(id: UUID(), name: name, product: product))
+        }
+        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self, weak central] _ in
+            guard let self, let central else { return }
+            self.step += 1
+            central.demoFeed(self.reading(for: central.mode, product: central.device?.product ?? .meter))
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+
+    /// A plausible reading for `mode`, with a little movement in the last digits.
+    private func reading(for mode: MultimeterMode, product: PokitProduct) -> Data {
+        let wobble = sin(Double(step) / 3)
+        let value: Double
+        var status: UInt8 = 1
+        var range: UInt8 = 0
+        switch mode {
+        case .dcVoltage:
+            value = 4.987 + wobble * 0.002
+            range = 2
+        case .acVoltage:
+            value = 11.82 + wobble * 0.01
+            range = 3
+        case .dcCurrent:
+            value = 0.0423 + wobble * 0.0001
+            range = product == .pro ? 3 : 2
+        case .acCurrent:
+            value = 0.1264 + wobble * 0.0002
+            range = product == .pro ? 4 : 2
+        case .resistance:
+            value = 1234 + wobble * 0.6
+            range = 3
+        case .continuity:
+            value = 0.8 + wobble * 0.05
+        case .diode:
+            value = 0.612 + wobble * 0.001
+            status = 0
+        case .temperature, .externalTemperature:
+            value = 23.4 + wobble * 0.05
+            status = 0
+        case .capacitance:
+            value = 4.7e-6 + wobble * 1e-9
+            range = 1
+        case .idle:
+            value = 0
+            status = 0
+        }
+        var data = Data([status])
+        withUnsafeBytes(of: Float(value).bitPattern.littleEndian) { data.append(contentsOf: $0) }
+        data.append(mode.rawValue)
+        data.append(range)
+        return data
+    }
+}
+
+extension PokitCentral {
+    fileprivate func startDemo(_ scenario: String) {
+        let demo = DemoMeter()
+        self.demo = demo
+        bluetooth = .ready
+        demo.start(scenario: scenario, central: self)
+    }
+
+    fileprivate func demoShowList(_ devices: [DiscoveredPokit]) {
+        device = nil
+        discovered = devices
+        phase = .scanning
+    }
+
+    fileprivate func demoShowMeter(_ device: RememberedPokit) {
+        self.device = device
+        meter.reset(for: mode)
+        status = DeviceStatus(data: device.product == .pro
+            ? Data([0x02, 0x64, 0x3B, 0x83, 0x40, 0x01, 0x00, 0x00])
+            : Data([0x00, 0x25, 0x07, 0x33, 0x40]))
+        phase = .ready
+    }
+
+    fileprivate func demoFeed(_ data: Data) {
+        guard phase == .ready else { return }
+        handleReading(data)
     }
 }
 

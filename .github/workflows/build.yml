@@ -80,6 +80,62 @@ jobs:
           test -d "$APP/Watch/Pokit.app"
           /usr/libexec/PlistBuddy -c "Print" "$APP/Watch/Pokit.app/Info.plist"
 
+      # The simulator has no Bluetooth, so the app runs against its built-in demo meter.
+      # This is the only place the UI gets rendered without a real watch.
+      - name: Screenshots from the watch simulator
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          APP="$RUNNER_TEMP/dd/Build/Products/Debug-watchsimulator/Pokit.app"
+          BUNDLE=io.github.dionho.pokitwatch.watchkitapp
+          OUT="$RUNNER_TEMP/screenshots"
+          mkdir -p "$OUT"
+          xcrun simctl list devices available | grep -i "Apple Watch" || true
+
+          pick() {
+            for size in "$@"; do
+              udid=$(xcrun simctl list devices available | grep -E "Apple Watch.*\(${size}\)" | head -1 \
+                | grep -oE "[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}" || true)
+              if [ -n "$udid" ]; then echo "$udid"; return; fi
+            done
+          }
+          shoot() {
+            local udid="$1" name="$2"
+            shift 2
+            xcrun simctl terminate "$udid" "$BUNDLE" 2>/dev/null || true
+            xcrun simctl launch "$udid" "$BUNDLE" "$@"
+            sleep 6
+            xcrun simctl io "$udid" screenshot "$OUT/$name.png"
+          }
+
+          SMALL=$(pick 40mm 41mm 42mm)
+          LARGE=$(pick 46mm 45mm 44mm)
+          for entry in "small:$SMALL" "large:$LARGE"; do
+            label="${entry%%:*}"
+            udid="${entry#*:}"
+            [ -n "$udid" ] || continue
+            xcrun simctl boot "$udid"
+            xcrun simctl bootstatus "$udid" -b
+            xcrun simctl install "$udid" "$APP"
+            shoot "$udid" "$label-1-voltage" -PokitDemo meter -meter.mode 1
+            shoot "$udid" "$label-2-continuity" -PokitDemo meter -meter.mode 7
+            shoot "$udid" "$label-3-resistance-pro-de" -PokitDemo pro -meter.mode 5 -AppleLanguages "(de)"
+            shoot "$udid" "$label-4-list" -PokitDemo list
+            shoot "$udid" "$label-5-modes" -PokitDemo pro -meter.mode 1 -PokitDemoScreen modes
+            shoot "$udid" "$label-6-ranges-de" -PokitDemo meter -meter.mode 5 -PokitDemoScreen ranges -AppleLanguages "(de)"
+            shoot "$udid" "$label-7-device" -PokitDemo pro -PokitDemoScreen device
+            xcrun simctl shutdown "$udid"
+          done
+          ls -la "$OUT"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: screenshots
+          path: ${{ runner.temp }}/screenshots
+          if-no-files-found: ignore
+
       - name: Keep build logs
         if: failure()
         uses: actions/upload-artifact@v5

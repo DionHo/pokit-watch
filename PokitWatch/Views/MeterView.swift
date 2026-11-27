@@ -5,8 +5,9 @@ import SwiftUI
 struct MeterView: View {
     @EnvironmentObject private var pokit: PokitCentral
     @ObservedObject var meter: MeterState
-    @State private var showsModes = false
-    @State private var showsRanges = false
+    // The defaults key is only ever set from the command line, for simulator screenshots.
+    @State private var showsModes = UserDefaults.standard.string(forKey: "PokitDemoScreen") == "modes"
+    @State private var showsRanges = UserDefaults.standard.string(forKey: "PokitDemoScreen") == "ranges"
 
     var body: some View {
         VStack(spacing: 2) {

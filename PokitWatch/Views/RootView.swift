@@ -11,7 +11,8 @@ enum Route: Hashable {
 struct RootView: View {
     @EnvironmentObject private var pokit: PokitCentral
     @Environment(\.scenePhase) private var scenePhase
-    @State private var path: [Route] = []
+    @State private var path: [Route] =
+        UserDefaults.standard.string(forKey: "PokitDemoScreen") == "device" ? [.device] : []
 
     var body: some View {
         NavigationStack(path: $path) {
