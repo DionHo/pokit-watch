@@ -78,6 +78,8 @@ jobs:
           APP="$RUNNER_TEMP/PokitWatch.xcarchive/Products/Applications/Pokit Watch.app"
           find "$RUNNER_TEMP/PokitWatch.xcarchive/Products" -maxdepth 4 -name "*.app" -print
           test -d "$APP/Watch/Pokit.app"
+          test -d "$APP/Watch/Pokit.app/de.lproj"
+          test -f "$APP/Watch/Pokit.app/PrivacyInfo.xcprivacy"
           /usr/libexec/PlistBuddy -c "Print" "$APP/Watch/Pokit.app/Info.plist"
 
       # The simulator has no Bluetooth, so the app runs against its built-in demo meter.
