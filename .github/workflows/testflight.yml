@@ -1,0 +1,175 @@
+name: TestFlight
+
+# Builds the app, signs it with Apple's cloud-managed distribution certificate and uploads
+# it to App Store Connect / TestFlight. No Mac needed: everything runs on a GitHub runner.
+#
+# Start it by hand (Actions > TestFlight > Run workflow). TestFlight builds expire after
+# 90 days, so run it again before that.
+#
+# Required repository secrets (Settings > Secrets and variables > Actions):
+#   APPLE_TEAM_ID          10-character team ID of the Apple Developer account
+#   APPSTORE_KEY_ID        key ID of an App Store Connect API key (role: Admin)
+#   APPSTORE_ISSUER_ID     issuer ID shown next to the API keys
+#   APPSTORE_PRIVATE_KEY   contents of the downloaded AuthKey_XXXX.p8 file
+# Optional repository variable:
+#   APP_BUNDLE_ID          bundle ID of the iOS host app (default: see project.yml)
+#
+# See docs/DEPLOYMENT.md for the full walkthrough.
+on:
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: Upload to TestFlight (off = only check that signing works)
+        type: boolean
+        default: true
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  testflight:
+    name: Archive, sign, upload
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+      ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+      BUNDLE_ID_OVERRIDE: ${{ vars.APP_BUNDLE_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check secrets and install the API key
+        env:
+          PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+        run: |
+          missing=0
+          for name in TEAM_ID KEY_ID ISSUER_ID PRIVATE_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Repository secret for $name is missing. See docs/DEPLOYMENT.md."
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+
+          mkdir -p "$RUNNER_TEMP/keys"
+          KEY_PATH="$RUNNER_TEMP/keys/AuthKey_${KEY_ID}.p8"
+          printf '%s\n' "$PRIVATE_KEY" > "$KEY_PATH"
+          if ! grep -q "BEGIN PRIVATE KEY" "$KEY_PATH"; then
+            # Also accept the key pasted as base64.
+            printf '%s' "$PRIVATE_KEY" | base64 --decode > "$KEY_PATH" || true
+          fi
+          if ! grep -q "BEGIN PRIVATE KEY" "$KEY_PATH"; then
+            echo "::error::APPSTORE_PRIVATE_KEY does not look like a .p8 key (paste the whole file, including the BEGIN/END lines)."
+            exit 1
+          fi
+          chmod 600 "$KEY_PATH"
+          echo "KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Generate Xcode project
+        run: |
+          xcodebuild -version
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Archive (unsigned)
+        run: |
+          set -o pipefail
+          # A timestamp is always higher than the last build number, whatever happened before.
+          BUILD_NUMBER="$(date -u +%y%m%d%H%M)"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          EXTRA=()
+          if [ -n "$BUNDLE_ID_OVERRIDE" ]; then
+            EXTRA+=("APP_BUNDLE_ID=$BUNDLE_ID_OVERRIDE")
+          fi
+          # Signing happens in the export step. Archiving unsigned avoids creating a new
+          # development certificate on every run of this throw-away machine.
+          xcodebuild archive \
+            -project PokitWatch.xcodeproj \
+            -scheme PokitWatch \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/PokitWatch.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGNING_ALLOWED=NO \
+            "${EXTRA[@]}" \
+            | tee "$RUNNER_TEMP/archive.log" | grep -E "error|warning:|failed|FAILED|SUCCEEDED" || true
+          grep -q "ARCHIVE SUCCEEDED" "$RUNNER_TEMP/archive.log"
+
+      - name: Sign and export
+        env:
+          UPLOAD: ${{ inputs.upload }}
+        run: |
+          set -o pipefail
+          DESTINATION=export
+          if [ "$UPLOAD" = "true" ]; then
+            DESTINATION=upload
+          fi
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>destination</key>
+            <string>$DESTINATION</string>
+            <key>signingStyle</key>
+            <string>automatic</string>
+            <key>teamID</key>
+            <string>$TEAM_ID</string>
+            <key>manageAppVersionAndBuildNumber</key>
+            <false/>
+            <key>testFlightInternalTestingOnly</key>
+            <true/>
+            <key>uploadSymbols</key>
+            <true/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/PokitWatch.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
+            2>&1 | tee "$RUNNER_TEMP/export.log"
+          grep -q "EXPORT SUCCEEDED" "$RUNNER_TEMP/export.log"
+
+      - name: Summary
+        if: success()
+        env:
+          UPLOAD: ${{ inputs.upload }}
+        run: |
+          {
+            echo "### Pokit Watch build $BUILD_NUMBER"
+            if [ "$UPLOAD" = "true" ]; then
+              echo "Uploaded to App Store Connect. Processing takes 5–30 minutes; after that the build shows up in TestFlight."
+            else
+              echo "Signing worked. Nothing was uploaded (upload was switched off)."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the API key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"
+
+      - name: Keep logs
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: testflight-logs
+          path: |
+            ${{ runner.temp }}/archive.log
+            ${{ runner.temp }}/export.log
+            ${{ runner.temp }}/export/*.log
+            ${{ runner.temp }}/export/*.plist
+          if-no-files-found: ignore

@@ -1,0 +1,91 @@
+name: Build
+
+# Compiles and tests everything without any signing. Runs on every push so a broken
+# build is noticed before trying to ship to TestFlight.
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  core-tests:
+    name: PokitKit tests (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.2-noble
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run protocol tests
+        run: swift test --package-path PokitKit
+
+  apple-build:
+    name: Watch + host app (Xcode)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep -iE "watch|iphone" || true
+
+      - name: Run protocol tests (macOS)
+        run: swift test --package-path PokitKit
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build for simulators (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project PokitWatch.xcodeproj \
+            -scheme PokitWatch \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee "$RUNNER_TEMP/build.log" | grep -E "error|warning:|failed|FAILED|SUCCEEDED" || true
+          grep -q "BUILD SUCCEEDED" "$RUNNER_TEMP/build.log"
+
+      - name: Archive for devices (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project PokitWatch.xcodeproj \
+            -scheme PokitWatch \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/PokitWatch.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee "$RUNNER_TEMP/archive.log" | grep -E "error|warning:|failed|FAILED|SUCCEEDED" || true
+          grep -q "ARCHIVE SUCCEEDED" "$RUNNER_TEMP/archive.log"
+
+      - name: Check that the watch app is embedded
+        run: |
+          APP="$RUNNER_TEMP/PokitWatch.xcarchive/Products/Applications/Pokit Watch.app"
+          find "$RUNNER_TEMP/PokitWatch.xcarchive/Products" -maxdepth 4 -name "*.app" -print
+          test -d "$APP/Watch/Pokit.app"
+          /usr/libexec/PlistBuddy -c "Print" "$APP/Watch/Pokit.app/Info.plist"
+
+      - name: Keep build logs
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: build-logs
+          path: |
+            ${{ runner.temp }}/build.log
+            ${{ runner.temp }}/archive.log
+          if-no-files-found: ignore

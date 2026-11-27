@@ -1,0 +1,76 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Open the Watch app on this iPhone and install “Pokit” under Available Apps if it is not on your watch yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffne die Watch-App auf diesem iPhone und installiere „Pokit“ unter „Verfügbare Apps“, falls sie noch nicht auf deiner Uhr ist."
+          }
+        }
+      }
+    },
+    "Pick the meter from the list. The watch remembers it and reconnects on its own next time.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle das Messgerät aus der Liste. Die Uhr merkt es sich und verbindet sich beim nächsten Mal von selbst."
+          }
+        }
+      }
+    },
+    "Pokit Watch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pokit Watch"
+          }
+        }
+      }
+    },
+    "Start Pokit on the watch and switch your meter on.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starte Pokit auf der Uhr und schalte dein Messgerät ein."
+          }
+        }
+      }
+    },
+    "This app runs on your Apple Watch. It connects to a Pokit Meter or Pokit Pro directly from the watch, so the iPhone is not needed while measuring.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese App läuft auf deiner Apple Watch. Sie verbindet sich direkt von der Uhr mit einem Pokit Meter oder Pokit Pro – das iPhone wird beim Messen nicht gebraucht."
+          }
+        }
+      }
+    },
+    "Unofficial project, not affiliated with Pokit Innovations.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inoffizielles Projekt, keine Verbindung zu Pokit Innovations."
+          }
+        }
+      }
+    },
+    "Version %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version %@"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}
