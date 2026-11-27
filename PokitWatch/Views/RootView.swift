@@ -69,6 +69,16 @@ struct RootView: View {
         .onChange(of: pokit.device == nil) { _, _ in
             path.removeAll()
         }
+        // A quick-start complication was tapped.
+        .onOpenURL { url in
+            guard let mode = QuickStartLink.mode(from: url) else { return }
+            path.removeAll()
+            // Already in that mode: leave hold and min/max alone. With no device chosen yet
+            // the mode is kept for when one is.
+            if pokit.mode != mode, pokit.device?.product.measurementModes.contains(mode) != false {
+                pokit.select(mode: mode)
+            }
+        }
     }
 }
 

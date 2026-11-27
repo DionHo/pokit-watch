@@ -24,7 +24,8 @@ and shows the reading on your wrist. The iPhone is only needed to install the ap
   the app with the meter switched on and in range.
 - Connected **only while the app is on screen**: leaving it stops the measurement and drops the
   link, so the meter is not kept busy (or blocked for other apps) when nobody is looking.
-- A **complication** for the watch face and the Smart Stack, so the app is one tap away.
+- **Complications** for the watch face and the Smart Stack, so the app is one tap away:
+  one that just opens it, and quick starts that open it straight in DC voltage or continuity.
 - Multimeter modes: DC/AC voltage, DC/AC current, resistance, continuity, diode, temperature,
   plus capacitance and external temperature on the Pokit Pro.
 - Auto-range or a fixed range; the display keeps the decimal point steady per range, like a
@@ -48,7 +49,8 @@ asks the meter again and, if the link is really dead, reconnects from scratch.
 Getting to it quickly:
 
 - **Watch face:** touch and hold the face, *Edit*, swipe to *Complications*, tap a slot and
-  pick *Wristmeter*. One tap on it opens the app.
+  pick one under *Wristmeter*: the plain one opens the app as you left it, *DC Voltage* and
+  *Continuity* open it in that mode.
 - **Smart Stack:** turn the Digital Crown up on the watch face, scroll to the end, *Edit*, **+**,
   *Wristmeter*. Pin it to keep it at the top.
 - Or ask Siri to "open Wristmeter".
@@ -83,7 +85,7 @@ pick your team for both targets and run the `PokitWatch` scheme on your iPhone/w
 |---|---|
 | `PokitKit/` | Swift package with the Pokit protocol: UUIDs, settings/reading/status encoding, range tables for Meter and Pro, value formatting. No Apple frameworks, so it is unit-tested on Linux too. |
 | `PokitWatch/` | The watchOS app (SwiftUI + CoreBluetooth). `Bluetooth/PokitCentral.swift` owns the connection. |
-| `PokitWidgets/` | WidgetKit extension with the complications. They only launch the app. |
+| `PokitWidgets/` | WidgetKit extension with the complications. They only launch the app, optionally in a given mode. |
 | `PokitPhone/` | Minimal iOS host app. It exists because TestFlight delivers watch apps inside an iOS app. |
 | `project.yml` | [XcodeGen](https://github.com/yonaskolb/XcodeGen) definition; the Xcode project is generated, not committed. |
 | `.github/workflows/build.yml` | Tests and unsigned builds on every push. |

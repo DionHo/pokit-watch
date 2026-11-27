@@ -96,12 +96,15 @@ targets:
           - bluetooth-central
         ITSAppUsesNonExemptEncryption: false
 
-  # Complications for the watch face and the Smart Stack. They only launch the app.
+  # Complications for the watch face and the Smart Stack. They only launch the app,
+  # optionally in a particular mode.
   PokitWidgets:
     type: app-extension
     platform: watchOS
     sources:
       - path: PokitWidgets
+    dependencies:
+      - package: PokitKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).watchkitapp.widgets

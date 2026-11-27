@@ -10,7 +10,9 @@ the Apple Watch. The owner has a Windows PC, an iPhone and an Apple Watch, and *
 - `PokitWatch/` – the watch app. `Bluetooth/PokitCentral.swift` is the connection state machine
   (scan, connect, auto-reconnect, watchdog, background/foreground). `Views/` is SwiftUI.
 - `PokitWidgets/` – WidgetKit extension: complications for the watch face and the Smart Stack.
-  They only launch the app; there is no data shared with it (that would need an app group).
+  They only launch the app, plain or in a given mode (`QuickStartLink` in PokitKit carries the
+  mode to `RootView.onOpenURL`); no data is shared with the app (that would need an app group).
+  Complications cannot be rendered in CI, so their layout is unverified until the owner looks.
 - `PokitPhone/` – minimal iOS host app; it only exists to carry the watch app.
 - `project.yml` – XcodeGen definition. The `.xcodeproj` and the `Info.plist` files are generated.
 - `docs/PROTOCOL.md` – byte-level protocol reference with sources. Read it before touching the
