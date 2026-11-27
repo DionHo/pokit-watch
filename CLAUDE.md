@@ -31,8 +31,12 @@ Nothing Apple-specific can be built locally without a Mac. GitHub Actions is the
   the screenshots are the only way to see the UI without a device.
 - The simulator has no Bluetooth. The app has a demo mode for it: launch arguments
   `-PokitDemo meter|pro|list`, `-meter.mode <raw value>`, `-PokitDemoScreen modes|ranges|device`.
-- `.github/workflows/testflight.yml` is started by hand and needs Apple Developer secrets.
-  It has never run.
+- `.github/workflows/testflight.yml` is started by hand (pick the branch to ship) and needs the
+  Apple Developer secrets, which are set in this repository. It archives unsigned, then signs
+  with Apple's cloud-managed certificate during export and uploads; that works (first upload
+  2026-11-27). A run takes about 3 minutes, plus Apple's processing before TestFlight offers
+  the build. App Store Connect warns that uploads need the iOS 27 SDK (Xcode 27) from April
+  2027: move the runner image or select the newer Xcode before then.
 
 Because a compile error costs a full CI round trip, keep changes small, stay with APIs that
 exist on watchOS 10, and read the surrounding code before editing. Swift language mode is 5.
@@ -40,7 +44,7 @@ exist on watchOS 10, and read the surrounding code before editing. Swift languag
 ## State of things
 
 - Verified: protocol tests (byte captures from real devices, via dokit), CI builds, UI in the
-  simulator on 40 mm and 46 mm.
+  simulator on 40 mm and 46 mm, signing and upload to TestFlight.
 - **Not verified: anything on real hardware.** The Bluetooth code has been reviewed but never
   talked to a Pokit. Expect the first device test to find problems.
 - There is no way to read logs from the watch without Xcode. To debug behaviour on the device,

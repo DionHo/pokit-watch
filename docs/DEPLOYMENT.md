@@ -84,7 +84,7 @@ niemanden mehr lesbar, auch nicht für dich.
 ### 6. Workflow starten
 
 *Actions › TestFlight › Run workflow* (Branch auswählen, „Upload" angehakt lassen). Der Lauf
-dauert etwa 10 Minuten: Projekt generieren, archivieren, mit Apples Cloud-Zertifikat signieren,
+dauert etwa 3 Minuten: Projekt generieren, archivieren, mit Apples Cloud-Zertifikat signieren,
 hochladen. Danach verarbeitet Apple den Build noch 5–30 Minuten.
 
 Hinweis: GitHub zeigt „Run workflow" nur für Workflows an, die im Standard-Branch (`main`)
@@ -132,8 +132,9 @@ die vollständigen Logs zusätzlich als Artefakt `testflight-logs` angehängt.
 | `The bundle version must be higher than the previously uploaded version` | Sollte durch den Zeitstempel nicht vorkommen; Workflow einfach neu starten. |
 | Build erscheint nicht in TestFlight | Verarbeitung abwarten; Apple schickt bei Problemen eine E-Mail an die Apple-ID. |
 
-Der Signier- und Upload-Schritt konnte ohne Apple-Konto nicht vorab getestet werden. Falls er
-beim ersten Lauf hakt, hilft das Log aus `testflight-logs` beim Nachbessern des Workflows.
+App Store Connect meldet beim Hochladen eine Warnung zur SDK-Version (ab April 2027 wird das
+iOS-27-SDK verlangt). Sie verhindert den Upload nicht; bis dahin muss der Workflow auf ein
+neueres Xcode umgestellt werden.
 
 ## Geht es auch ohne Developer Program?
 
