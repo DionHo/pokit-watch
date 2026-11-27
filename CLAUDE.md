@@ -26,7 +26,10 @@ the Apple Watch. The owner has a Windows PC, an iPhone and an Apple Watch, and *
 Nothing Apple-specific can be built locally without a Mac. GitHub Actions is the compiler:
 
 - `swift test --package-path PokitKit` runs the protocol tests wherever a Swift toolchain exists
-  (Linux, macOS, Windows).
+  (Linux, macOS, Windows). In a Linux session without one, Docker does it (start `dockerd` if
+  it is not running): `docker run --rm -v "$PWD/PokitKit":/pkg -w /pkg swift:6.2-noble swift test`.
+  The same image catches syntax errors in the app sources before a CI round trip:
+  `swiftc -frontend -parse PokitWatch/**/*.swift PokitWidgets/*.swift` (syntax only, no types).
 - Every push runs `.github/workflows/build.yml`: PokitKit tests, simulator build, unsigned device
   archive, bundle checks, simulator screenshots, and the artifact `PokitWatch-unsigned-ipa`.
   A run takes about 10 minutes. Follow it with `gh run watch`, fetch the IPA with
@@ -42,7 +45,9 @@ Nothing Apple-specific can be built locally without a Mac. GitHub Actions is the
   with Apple's cloud-managed certificate during export and uploads; that works (first upload
   2026-11-27). A run takes about 3 minutes, plus Apple's processing before TestFlight offers
   the build. App Store Connect warns that uploads need the iOS 27 SDK (Xcode 27) from April
-  2027: move the runner image or select the newer Xcode before then.
+  2027: move the runner image or select the newer Xcode before then. The build number is the
+  UTC time of the run (`yymmddHHMM`), which tells which commit a build in TestFlight came from.
+  Start a run only when the owner asks for it.
 
 Because a compile error costs a full CI round trip, keep changes small, stay with APIs that
 exist on watchOS 10, and read the surrounding code before editing. Swift language mode is 5.
@@ -52,8 +57,15 @@ exist on watchOS 10, and read the surrounding code before editing. Swift languag
 - Verified: protocol tests (byte captures from real devices, via dokit), CI builds, UI in the
   simulator on 40 mm and 46 mm, signing and upload to TestFlight.
 - On real hardware: version 0.1.0 was installed through TestFlight and worked against the
-  owner's meter (2026-11-27). Everything changed after that is unverified on a device until
-  the owner has tried the next TestFlight build; say so when reporting.
+  owner's meter (2026-11-27). Uploaded since, with no report back yet: 0.2.0 (connected only
+  while on screen, complications incl. quick starts) and 0.3.0 (oscilloscope, data logger,
+  diagnostics). Treat all of that as unverified on a device until the owner says otherwise,
+  and say so when reporting. Whether the owner's meter is a Pokit Meter or a Pokit Pro is
+  not known yet; it matters for the logger's layout and for reading diagnostics.
+- `main` only has what was merged with PR #2 (the Wristmeter rename and docs). Later work sits
+  on the work branch until the owner asks for a PR.
+- Offered to the owner, not built: a wrist-down timeout that disconnects independently of
+  watchOS's "Return to Clock" setting; quick-start complications for more modes.
 - Oscilloscope and data logger are implemented from the documentation and dokit's byte vectors
   only; whether a real device behaves as assumed (order of Metadata and samples, the Pro's
   sample counts, what a multimeter command does to a running log) is unverified until the
@@ -71,8 +83,9 @@ exist on watchOS 10, and read the surrounding code before editing. Swift languag
 
 ## Conventions
 
-- Code, comments, README and commit messages are in English; `docs/DEPLOYMENT.md` and
-  conversation with the owner are in German. UI strings are English in code, with German in
+- Code, comments, README and commit messages are in English; `docs/DEPLOYMENT.md` is in
+  German. Talk to the owner in the language of their last message (German at first, English
+  lately). UI strings are English in code, with German in
   `Localizable.xcstrings` (keep both catalogs in step when adding strings; mode titles from
   `MultimeterMode.title` are localisation keys too).
 - Comments explain why, not what.
