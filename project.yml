@@ -24,7 +24,7 @@ settings:
     # Change these two if you fork the project: the bundle ID must be unique to your
     # Apple Developer account. The watch app's ID must start with the host app's ID.
     APP_BUNDLE_ID: io.github.dionho.pokitwatch
-    MARKETING_VERSION: "0.1.0"
+    MARKETING_VERSION: "0.2.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
@@ -71,6 +71,7 @@ targets:
       - path: PokitWatch
     dependencies:
       - package: PokitKit
+      - target: PokitWidgets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).watchkitapp
@@ -89,10 +90,31 @@ targets:
         WKCompanionAppBundleIdentifier: $(APP_BUNDLE_ID)
         WKRunsIndependentlyOfCompanionApp: true
         NSBluetoothAlwaysUsageDescription: Wristmeter connects to your Pokit Meter or Pokit Pro over Bluetooth to show its measurements.
-        # Keeps the link to the meter alive across short wrist-downs (watchOS 9+, Series 6+).
+        # Keeps the link to the meter alive while the app is shown dimmed with the wrist
+        # down (watchOS 9+, Series 6+). The app itself disconnects when it leaves the screen.
         UIBackgroundModes:
           - bluetooth-central
         ITSAppUsesNonExemptEncryption: false
+
+  # Complications for the watch face and the Smart Stack. They only launch the app.
+  PokitWidgets:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - path: PokitWidgets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).watchkitapp.widgets
+        PRODUCT_NAME: WristmeterWidgets
+        SKIP_INSTALL: "YES"
+    info:
+      path: PokitWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Wristmeter
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
 
 schemes:
   PokitWatch:

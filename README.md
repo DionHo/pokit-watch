@@ -20,8 +20,11 @@ and shows the reading on your wrist. The iPhone is only needed to install the ap
 
 ## What it does
 
-- Finds Pokit devices, remembers the one you picked and **reconnects on its own** whenever the
-  meter is switched on and in range.
+- Finds Pokit devices, remembers the one you picked and **reconnects on its own** when you open
+  the app with the meter switched on and in range.
+- Connected **only while the app is on screen**: leaving it stops the measurement and drops the
+  link, so the meter is not kept busy (or blocked for other apps) when nobody is looking.
+- A **complication** for the watch face and the Smart Stack, so the app is one tap away.
 - Multimeter modes: DC/AC voltage, DC/AC current, resistance, continuity, diode, temperature,
   plus capacitance and external temperature on the Pokit Pro.
 - Auto-range or a fixed range; the display keeps the decimal point steady per range, like a
@@ -32,8 +35,8 @@ and shows the reading on your wrist. The iPhone is only needed to install the ap
 - Battery state, firmware and serial number, flash the LED (Meter), torch (Pro).
 - English and German.
 
-A watchdog looks after the connection: if readings stop, the app first asks the meter again and,
-if the link is really dead, reconnects from scratch.
+While the app is open a watchdog looks after the connection: if readings stop, the app first
+asks the meter again and, if the link is really dead, reconnects from scratch.
 
 ## Using it
 
@@ -42,12 +45,20 @@ if the link is really dead, reconnects from scratch.
 3. Tap the mode line at the top to change the mode, the range button to change the range,
    the value (or the pause button) to hold. The battery icon opens the device page.
 
+Getting to it quickly:
+
+- **Watch face:** touch and hold the face, *Edit*, swipe to *Complications*, tap a slot and
+  pick *Wristmeter*. One tap on it opens the app.
+- **Smart Stack:** turn the Digital Crown up on the watch face, scroll to the end, *Edit*, **+**,
+  *Wristmeter*. Pin it to keep it at the top.
+- Or ask Siri to "open Wristmeter".
+
 Tips:
 
-- watchOS returns to the watch face after a while. To keep the meter in front, set
-  *Settings › General › Return to Clock › Wristmeter* to *After 1 hour* on the watch.
-- When the app goes to the background the meter is put into idle to save its battery;
-  measuring resumes when you raise your wrist.
+- With the wrist down the app stays in front, dimmed, and keeps measuring until watchOS
+  returns to the watch face (2 minutes by default). Then the meter is disconnected; opening
+  the app again reconnects. *Settings › General › Return to Clock › Wristmeter* on the watch
+  changes that time: longer keeps the reading in front, at the cost of the meter's battery.
 - Pokit Pro: the physical switch on the device decides which modes work. The app shows a hint
   if the selected mode does not match the switch.
 
@@ -72,6 +83,7 @@ pick your team for both targets and run the `PokitWatch` scheme on your iPhone/w
 |---|---|
 | `PokitKit/` | Swift package with the Pokit protocol: UUIDs, settings/reading/status encoding, range tables for Meter and Pro, value formatting. No Apple frameworks, so it is unit-tested on Linux too. |
 | `PokitWatch/` | The watchOS app (SwiftUI + CoreBluetooth). `Bluetooth/PokitCentral.swift` owns the connection. |
+| `PokitWidgets/` | WidgetKit extension with the complications. They only launch the app. |
 | `PokitPhone/` | Minimal iOS host app. It exists because TestFlight delivers watch apps inside an iOS app. |
 | `project.yml` | [XcodeGen](https://github.com/yonaskolb/XcodeGen) definition; the Xcode project is generated, not committed. |
 | `.github/workflows/build.yml` | Tests and unsigned builds on every push. |

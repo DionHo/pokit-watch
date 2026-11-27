@@ -81,6 +81,8 @@ jobs:
           test -d "$APP/Watch/WristmeterWatch.app"
           test -d "$APP/Watch/WristmeterWatch.app/de.lproj"
           test -f "$APP/Watch/WristmeterWatch.app/PrivacyInfo.xcprivacy"
+          test -d "$APP/Watch/WristmeterWatch.app/PlugIns/WristmeterWidgets.appex"
+          /usr/libexec/PlistBuddy -c "Print" "$APP/Watch/WristmeterWatch.app/PlugIns/WristmeterWidgets.appex/Info.plist"
           /usr/libexec/PlistBuddy -c "Print" "$APP/Watch/WristmeterWatch.app/Info.plist"
 
       # For installing without the Apple Developer Program: tools such as WatchBridge or
@@ -98,6 +100,8 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $ID" "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $ID.watchkitapp" "$APP/Watch/WristmeterWatch.app/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :WKCompanionAppBundleIdentifier $ID" "$APP/Watch/WristmeterWatch.app/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $ID.watchkitapp.widgets" \
+            "$APP/Watch/WristmeterWatch.app/PlugIns/WristmeterWidgets.appex/Info.plist"
           (cd "$WORK" && zip -qry "$RUNNER_TEMP/PokitWatch-unsigned.ipa" Payload)
           unzip -l "$RUNNER_TEMP/PokitWatch-unsigned.ipa" | grep -E "Info.plist|Wristmeter$|WristmeterWatch$" || true
           ls -la "$RUNNER_TEMP/PokitWatch-unsigned.ipa"

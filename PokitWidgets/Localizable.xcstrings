@@ -1,0 +1,36 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Opens the multimeter.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet das Multimeter."
+          }
+        }
+      }
+    },
+    "Tap to measure": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zum Messen tippen"
+          }
+        }
+      }
+    },
+    "Wristmeter": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wristmeter"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

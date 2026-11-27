@@ -9,6 +9,8 @@ the Apple Watch. The owner has a Windows PC, an iPhone and an Apple Watch, and *
   tables, value formatting). No Apple frameworks; unit-tested.
 - `PokitWatch/` – the watch app. `Bluetooth/PokitCentral.swift` is the connection state machine
   (scan, connect, auto-reconnect, watchdog, background/foreground). `Views/` is SwiftUI.
+- `PokitWidgets/` – WidgetKit extension: complications for the watch face and the Smart Stack.
+  They only launch the app; there is no data shared with it (that would need an app group).
 - `PokitPhone/` – minimal iOS host app; it only exists to carry the watch app.
 - `project.yml` – XcodeGen definition. The `.xcodeproj` and the `Info.plist` files are generated.
 - `docs/PROTOCOL.md` – byte-level protocol reference with sources. Read it before touching the
@@ -45,8 +47,13 @@ exist on watchOS 10, and read the surrounding code before editing. Swift languag
 
 - Verified: protocol tests (byte captures from real devices, via dokit), CI builds, UI in the
   simulator on 40 mm and 46 mm, signing and upload to TestFlight.
-- **Not verified: anything on real hardware.** The Bluetooth code has been reviewed but never
-  talked to a Pokit. Expect the first device test to find problems.
+- On real hardware: version 0.1.0 was installed through TestFlight and worked against the
+  owner's meter (2026-11-27). Everything changed after that is unverified on a device until
+  the owner has tried the next TestFlight build; say so when reporting.
+- The link to the meter exists only while the app is on screen (`setAppActive` in
+  `PokitCentral`, driven by `scenePhase`): going to the background writes idle and
+  disconnects, becoming active reconnects. The owner asked for this to spare the meter's
+  battery; do not reintroduce background connections or pending connects.
 - There is no way to read logs from the watch without Xcode. To debug behaviour on the device,
   ask what the screen shows, and if that is not enough add an on-device diagnostics view
   (a rolling log of connection events) rather than guessing.
@@ -59,6 +66,8 @@ exist on watchOS 10, and read the surrounding code before editing. Swift languag
   `MultimeterMode.title` are localisation keys too).
 - Comments explain why, not what.
 - Never commit signing material (`.p8`, `.p12`, profiles) or Apple ID details.
+- A new target needs its bundle ID registered in the developer portal before the TestFlight
+  workflow can sign it; tell the owner and add it to step 2 of `docs/DEPLOYMENT.md`.
 - Unofficial project: no Pokit branding or assets. The app is called **Wristmeter** (App Store
   Connect record, home-screen name on phone and watch). "Pokit" is a registered trademark of
   Pokit Innovations: use it only to refer to the meters ("works with Pokit Meter"), never as
