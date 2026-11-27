@@ -43,7 +43,8 @@ enum ConnectionPhase: Equatable {
     case idle
     /// Looking for devices (for the list, or for a remembered device the system lost track of).
     case scanning
-    /// Waiting for the remembered device to come into range. This never times out.
+    /// Waiting for the remembered device to come into range. This does not time out while
+    /// the app is on screen.
     case connecting
     /// Connected, discovering services.
     case preparing
@@ -151,7 +152,10 @@ final class PokitCentral: NSObject, ObservableObject {
     private var characteristics: [CBUUID: CBCharacteristic] = [:]
     private var pendingServiceDiscoveries = 0
 
+    /// The app is on screen. Only then is there a link to the meter, see `setAppActive`.
     private var appIsActive = true
+    /// Closes the link shortly after the app left the screen, once the idle command is out.
+    private var pendingClose: DispatchWorkItem?
     private var housekeeping: Timer?
     private var setupDeadline: Date?
     private var lastLinkActivity = Date.distantPast
@@ -324,40 +328,28 @@ final class PokitCentral: NSObject, ObservableObject {
         phase == .ready && characteristics[GATT.torch] != nil
     }
 
-    /// Called when the app comes to the front or goes to the background.
+    /// Called when the app appears on screen or leaves it (another app, the watch face, or
+    /// the system returning to the clock after the wrist has been down for a while).
     ///
-    /// In the background the meter is put into idle: readings would only wake the app for
-    /// nothing, and the Pokit saves power. The connection itself is kept where the system
-    /// allows it, so measuring resumes immediately when the wrist is raised.
+    /// The link only exists while the app is on screen. A connected Pokit uses more power than
+    /// one that is just waiting, and a pending connection would grab the meter the moment it
+    /// is switched on, whether anybody is looking or not. So leaving the screen ends the
+    /// measurement and the connection; coming back reconnects to the remembered device.
     func setAppActive(_ active: Bool) {
         guard active != appIsActive else { return }
         appIsActive = active
+        guard demo == nil else { return }
         if active {
+            pendingClose?.cancel()
+            pendingClose = nil
+            consecutiveFailures = 0
             markLinkFresh()
-            if let peripheral, phase == .ready || phase == .preparing, peripheral.state != .connected {
-                // The link went down while the app was suspended and no callback arrived.
-                linkDown()
-                scheduleReconnect()
-            } else if phase == .ready {
-                applySettings()
-                pollStatus()
-            } else {
-                resume()
+            if device != nil {
+                phase = .connecting
             }
+            resume()
         } else {
-            if phase == .ready {
-                applySettings()
-                meter.isReceiving = false
-                // Ask for a moment of runtime so the idle command is sent before the app is suspended.
-                ProcessInfo.processInfo.performExpiringActivity(withReason: "Stop the meter") { expired in
-                    if !expired {
-                        Thread.sleep(forTimeInterval: 1)
-                    }
-                }
-            } else if phase == .scanning, device == nil {
-                stopScanning()
-                phase = .idle
-            }
+            suspendLink()
         }
     }
 
@@ -366,14 +358,62 @@ final class PokitCentral: NSObject, ObservableObject {
     /// Makes sure whatever should be happening is happening: connecting to the remembered
     /// device, or scanning when there is none.
     private func resume() {
-        guard isPoweredOn else { return }
+        guard isPoweredOn, appIsActive else { return }
         if device != nil {
-            if peripheral == nil || peripheral?.state == .disconnected {
+            if let peripheral, peripheral.state == .connected {
+                if phase != .ready, phase != .preparing {
+                    // Still connected from before the app left the screen (it came back before
+                    // the link was closed): set the link up again instead of reconnecting.
+                    prepare(peripheral)
+                }
+            } else if peripheral == nil || peripheral?.state == .disconnected {
                 beginConnection()
             }
-        } else if appIsActive {
+        } else {
             startScanning()
         }
+    }
+
+    /// Ends the measurement and the connection because the app is no longer on screen.
+    /// The device stays remembered; `setAppActive(true)` brings the link back.
+    private func suspendLink() {
+        stopScanning()
+        let wasReady = phase == .ready
+        if wasReady {
+            write(.idle)
+        }
+        linkDown()
+        phase = .idle
+        guard let peripheral else { return }
+
+        guard wasReady else {
+            // Also withdraws a connection request that is still waiting for the device.
+            central?.cancelPeripheralConnection(peripheral)
+            return
+        }
+        // A moment for the idle command to go out before the link is closed.
+        let close = DispatchWorkItem { [weak self] in
+            guard let self, !self.appIsActive else { return }
+            self.pendingClose = nil
+            self.central?.cancelPeripheralConnection(peripheral)
+        }
+        pendingClose = close
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: close)
+        // Ask for the runtime to get that far before the app is suspended.
+        ProcessInfo.processInfo.performExpiringActivity(withReason: "Disconnect the meter") { expired in
+            if !expired {
+                Thread.sleep(forTimeInterval: 1)
+            }
+        }
+    }
+
+    /// Starts service discovery on a connected peripheral.
+    private func prepare(_ peripheral: CBPeripheral) {
+        linkDown()
+        phase = .preparing
+        setupDeadline = Date().addingTimeInterval(Timing.setupTimeout)
+        peripheral.delegate = self
+        peripheral.discoverServices(GATT.services)
     }
 
     /// Makes mode and range valid for `product`: a mode the product does not have (capacitance
@@ -390,7 +430,7 @@ final class PokitCentral: NSObject, ObservableObject {
     }
 
     private func beginConnection() {
-        guard isPoweredOn, let central, let device else { return }
+        guard isPoweredOn, appIsActive, let central, let device else { return }
 
         let candidate: CBPeripheral?
         if let current = peripheral, current.identifier == device.id {
@@ -413,7 +453,8 @@ final class PokitCentral: NSObject, ObservableObject {
         target.delegate = self
         phase = .connecting
         // A pending connection has no timeout: it completes whenever the Pokit is switched on
-        // and in range. That is exactly the wanted auto-reconnect behaviour.
+        // and in range. That is the wanted auto-reconnect behaviour while the app is on
+        // screen; `suspendLink` withdraws the request when it leaves.
         central.connect(target, options: nil)
     }
 
@@ -428,7 +469,7 @@ final class PokitCentral: NSObject, ObservableObject {
         guard let peripheral else { return }
         consecutiveFailures += 1
         linkDown()
-        phase = .connecting
+        phase = appIsActive ? .connecting : .idle
         central?.cancelPeripheralConnection(peripheral)
         // The disconnect callback normally triggers the reconnect; this covers the cases
         // where it does not arrive (e.g. cancelling a connection that was still pending).
@@ -461,6 +502,11 @@ final class PokitCentral: NSObject, ObservableObject {
     }
 
     private func scheduleReconnect() {
+        guard appIsActive else {
+            // Nobody is looking: stay disconnected until the app is back on screen.
+            phase = .idle
+            return
+        }
         if device != nil {
             phase = .connecting
             DispatchQueue.main.asyncAfter(deadline: .now() + reconnectDelay) { [weak self] in
@@ -515,10 +561,10 @@ final class PokitCentral: NSObject, ObservableObject {
         return MultimeterSettings(mode: mode, range: range, updateInterval: interval)
     }
 
-    /// Sends the selected mode to the meter, or idle while the app is in the background.
+    /// Sends the selected mode and range to the meter.
     private func applySettings() {
-        guard phase == .ready else { return }
-        write(appIsActive ? currentSettings() : .idle)
+        guard phase == .ready, appIsActive else { return }
+        write(currentSettings())
         lastNudge = Date()
     }
 
@@ -591,7 +637,7 @@ final class PokitCentral: NSObject, ObservableObject {
 
     /// Runs once a second: setup timeout, battery polling and the reading watchdog.
     private func tick() {
-        guard isPoweredOn else { return }
+        guard isPoweredOn, appIsActive else { return }
         let now = Date()
 
         switch phase {
@@ -601,7 +647,6 @@ final class PokitCentral: NSObject, ObservableObject {
             }
 
         case .ready:
-            guard appIsActive else { return }
             if now.timeIntervalSince(lastStatusPoll) > Timing.statusPollInterval {
                 pollStatus()
             }
@@ -627,8 +672,8 @@ final class PokitCentral: NSObject, ObservableObject {
             }
 
         case .connecting:
-            // A pending connection can be dropped without a callback while the app is
-            // suspended. Asking again is harmless when it is still pending.
+            // A connection request can get lost without a callback. Asking again is harmless
+            // when it is still pending.
             if now.timeIntervalSince(lastConnectCheck) > 5 {
                 lastConnectCheck = now
                 resume()
@@ -843,15 +888,12 @@ extension PokitCentral: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        guard peripheral.identifier == self.peripheral?.identifier else {
+        // A connection that completes after the app left the screen is not wanted any more.
+        guard peripheral.identifier == self.peripheral?.identifier, appIsActive else {
             central.cancelPeripheralConnection(peripheral)
             return
         }
-        linkDown()
-        phase = .preparing
-        setupDeadline = Date().addingTimeInterval(Timing.setupTimeout)
-        peripheral.delegate = self
-        peripheral.discoverServices(GATT.services)
+        prepare(peripheral)
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {

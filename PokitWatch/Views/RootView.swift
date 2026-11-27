@@ -51,14 +51,18 @@ struct RootView: View {
                 }
             }
         }
-        .onChange(of: scenePhase) { _, newPhase in
+        // `initial` covers a launch that never reaches the screen.
+        .onChange(of: scenePhase, initial: true) { _, newPhase in
             switch newPhase {
             case .active:
                 pokit.setAppActive(true)
             case .background:
+                // Off screen: the meter is disconnected until the app is back.
                 pokit.setAppActive(false)
             default:
-                // Inactive is the wrist-down, always-on state: keep measuring.
+                // Inactive is the wrist-down, always-on state. The app is still shown
+                // (dimmed), so keep measuring; it also passes through here on its way to
+                // or from the background, which must not change anything.
                 break
             }
         }
