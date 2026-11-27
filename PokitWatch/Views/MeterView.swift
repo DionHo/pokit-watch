@@ -1,5 +1,6 @@
 import PokitKit
 import SwiftUI
+import WatchKit
 
 /// The measurement screen: mode on top, the value in the middle, range and hold below.
 struct MeterView: View {
@@ -19,7 +20,7 @@ struct MeterView: View {
                 controls
                     .padding(.top, 5)
                     // Keeps the pills clear of the rounded display corners.
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, isCompact ? 10 : 16)
             } else {
                 Spacer(minLength: 0)
                 ConnectionStatusView()
@@ -146,12 +147,17 @@ struct MeterView: View {
                 Image(systemName: meter.isHolding ? "play.fill" : "pause.fill")
             }
             .buttonStyle(PillButtonStyle(tint: meter.isHolding ? .yellow : .white))
-            .frame(maxWidth: pokit.mode.hasRanges ? 52 : .infinity)
+            .frame(maxWidth: pokit.mode.hasRanges ? (isCompact ? 40 : 52) : .infinity)
             .accessibilityLabel(Text("Hold"))
         }
     }
 
     // MARK: Derived values
+
+    /// 40/41 mm watches: the bottom row has to be tighter for the range label to fit.
+    private var isCompact: Bool {
+        WKInterfaceDevice.current().screenBounds.width < 180
+    }
 
     private var switchMismatch: Bool {
         guard let position = pokit.status?.switchPosition else { return false }
@@ -219,7 +225,7 @@ struct PillButtonStyle: ButtonStyle {
             .lineLimit(1)
             .minimumScaleFactor(0.6)
             .foregroundStyle(tint)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 6)
             .frame(maxWidth: .infinity)
             .frame(height: 30)
             .background(tint.opacity(configuration.isPressed ? 0.4 : 0.22), in: Capsule())
