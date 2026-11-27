@@ -55,7 +55,12 @@ Tips:
 There is no App Store version. You build it yourself and install it through TestFlight; this
 works **without a Mac**, using GitHub Actions. It needs an Apple Developer Program membership.
 
-Step-by-step guide (German): [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+To try it first without the membership, every CI run also produces an unsigned IPA
+(artifact `PokitWatch-unsigned-ipa`) that tools such as
+[WatchBridge](https://github.com/AdminZachary/WatchBridge) can sign with a free Apple ID for
+7 days. That route is experimental and has not been tried with this app yet.
+
+Step-by-step guide for both (German): [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 If you do have a Mac: `brew install xcodegen && xcodegen generate`, open `PokitWatch.xcodeproj`,
 pick your team for both targets and run the `PokitWatch` scheme on your iPhone/watch.

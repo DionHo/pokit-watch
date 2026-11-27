@@ -8,7 +8,7 @@ macOS-Runner von GitHub Actions, verteilt wird über TestFlight.
 
 | | |
 |---|---|
-| Apple Developer Program | 99 USD/Jahr. Ohne geht es von Windows aus nicht zuverlässig (siehe [unten](#geht-es-auch-ohne-developer-program)). |
+| Apple Developer Program | 99 USD/Jahr. Zum Ausprobieren gibt es einen experimentellen Weg ohne (siehe [unten](#geht-es-auch-ohne-developer-program)). |
 | iPhone mit gekoppelter Apple Watch | watchOS 10 oder neuer. Für das Halten der Verbindung im Hintergrund Series 6 oder neuer. |
 | Dieses Repository auf GitHub | Öffentliche Repos haben kostenlose macOS-Runner. |
 
@@ -135,12 +135,56 @@ beim ersten Lauf hakt, hilft das Log aus `testflight-logs` beim Nachbessern des 
 
 ## Geht es auch ohne Developer Program?
 
-Nicht verlässlich von Windows aus:
+Vielleicht – als Experiment für 7 Tage. Mit einer kostenlosen Apple-ID signierte Apps laufen
+7 Tage und müssen danach neu signiert werden. Das Problem ist die Uhr: Die üblichen
+Windows-Werkzeuge installieren nur iPhone-Apps.
 
-- **Sideloadly / AltStore** signieren iPhone-Apps mit einer kostenlosen Apple-ID, entfernen
-  dabei aber eingebettete Watch-Apps bzw. installieren sie nicht auf der Uhr.
-- **Mit einem geliehenen Mac** geht es kostenlos: Xcode installieren, `brew install xcodegen`,
-  `xcodegen generate`, Projekt öffnen, eigenes „Personal Team" wählen, auf iPhone/Watch
-  starten. Die App läuft dann 7 Tage und muss danach neu installiert werden.
+**Dieser Weg ist mit dieser App noch nicht erprobt.** Er stützt sich auf die Angaben der
+genannten Projekte; ob er mit deiner iOS-/watchOS-Version funktioniert, zeigt nur der Versuch.
 
-Für eine App, die dauerhaft auf der Uhr bleiben soll, ist TestFlight der praktikable Weg.
+### Variante A: WatchBridge (Windows)
+
+[WatchBridge](https://github.com/AdminZachary/WatchBridge) ist ein quelloffenes
+Community-Werkzeug (Alpha-Stand), das nach eigener Beschreibung genau diese Lücke füllt:
+Entwicklermodus der Uhr vorbereiten, ein IPA mit iPhone-Hülle und eingebetteter Watch-App mit
+der Apple-ID signieren, erst aufs iPhone und dann auf die Uhr installieren. Es kann die
+Signatur vor Ablauf der 7 Tage erneuern, solange der PC läuft.
+
+1. **IPA holen:** GitHub › *Actions* › *Build* › letzter erfolgreicher Lauf › *Artifacts* ›
+   `PokitWatch-unsigned-ipa`. Das ZIP entpacken, darin liegt `PokitWatch-unsigned.ipa`.
+   (Die App darin hat die eigene Bundle-ID `io.github.dionho.pokitwatch.sideload`, damit sie
+   einer späteren TestFlight-Version nicht in die Quere kommt.)
+2. **Apple-Treiber:** iTunes oder die App „Apple-Geräte" aus dem Microsoft Store installieren.
+3. **WatchBridge** von der Releases-Seite laden, entpacken, `WatchBridge.exe` starten. Die
+   Datei ist nicht signiert, Windows SmartScreen warnt beim ersten Start.
+4. iPhone per USB anschließen und in WatchBridge auswählen. Die Uhr koppeln, auf der Uhr dem
+   Computer vertrauen und den Schalter für den Entwicklermodus anfordern. Dann auf der Uhr:
+   *Einstellungen › Datenschutz & Sicherheit › Entwicklermodus* einschalten, neu starten,
+   bestätigen. Zurück in WatchBridge „Erneut prüfen".
+5. Mit der Apple-ID anmelden, das IPA auswählen, signieren und installieren lassen.
+6. Auf dem iPhone ggf. *Einstellungen › Allgemein › VPN & Geräteverwaltung* das
+   Entwicklerzertifikat als vertrauenswürdig markieren und den Entwicklermodus einschalten.
+7. **Pokit** auf der Uhr öffnen.
+
+Zu beachten:
+
+- Du gibst deine Apple-ID in ein Programm eines Drittanbieters ein. Wer das nicht mit der
+  Haupt-ID tun möchte, legt dafür eine zweite Apple-ID an; sie muss nicht die des iPhones sein.
+- Kostenlose Apple-IDs erlauben nur wenige gleichzeitig installierte Apps und App-IDs pro Woche.
+- WatchBridge unterstützt nur ein iPhone mit genau einer gekoppelten Uhr.
+
+### Variante B: Sideloadly
+
+[Sideloadly](https://sideloadly.io) installiert das IPA aufs iPhone; die Watch-App wird danach
+in der iPhone-App *Watch* unter „Verfügbare Apps" installiert. In den erweiterten Optionen
+„Use automatic bundle ID" abschalten. Steht im Sideloadly-Log
+`Watch apps will be stripped from the IPA`, wurde die Watch-App entfernt – dann führt dieser
+Weg nicht zum Ziel.
+
+### Variante C: geliehener Mac
+
+Xcode installieren, `brew install xcodegen`, `xcodegen generate`, Projekt öffnen, eigenes
+„Personal Team" wählen, auf iPhone/Watch starten. Auch hier gilt die 7-Tage-Grenze.
+
+Für eine App, die dauerhaft und ohne PC auf der Uhr bleiben soll, ist TestFlight der
+praktikable Weg.
