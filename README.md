@@ -73,7 +73,9 @@ Tips:
   the app again reconnects. *Settings › General › Return to Clock › Wristmeter* on the watch
   changes that time: longer keeps the reading in front, at the cost of the meter's battery.
 - Pokit Pro: the physical switch on the device decides which modes work. The app shows a hint
-  if the selected mode does not match the switch.
+  if the selected mode does not match the switch. A mode the Pokit refuses to start is
+  started again as soon as the switch is moved, or with the button that takes the place of
+  the range and hold controls.
 
 ## Installing it
 

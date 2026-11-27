@@ -167,7 +167,7 @@ struct ScopeView: View {
     private var infoLine: some View {
         Group {
             if scope.activity == .failed {
-                Label("Capture failed", systemImage: "exclamationmark.triangle.fill")
+                Label(failureText, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
             } else if let capture = scope.capture, let summary = capture.summary {
                 Text(verbatim: summaryText(summary, mode: capture.mode))
@@ -206,6 +206,10 @@ struct ScopeView: View {
 
     private var isCompact: Bool {
         WKInterfaceDevice.current().screenBounds.width < 180
+    }
+
+    private var failureText: LocalizedStringKey {
+        pokit.switchMismatches(scope.mode) ? "Check the switch on the Pokit" : "Capture failed"
     }
 
     /// A repeating signal is described by its swing and frequency, anything else by its
@@ -355,7 +359,7 @@ struct LoggerView: View {
                 pokit.startLogger()
             }
             if logger.startWasRejected {
-                Label("Could not start", systemImage: "exclamationmark.triangle.fill")
+                Label(startFailureText, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
             }
             if (logger.metadata?.sampleCount ?? 0) > 0, logger.log == nil {
@@ -363,6 +367,10 @@ struct LoggerView: View {
             }
         }
         .pickerStyle(.navigationLink)
+    }
+
+    private var startFailureText: LocalizedStringKey {
+        pokit.switchMismatches(logger.mode.multimeterMode) ? "Check the switch on the Pokit" : "Could not start"
     }
 
     private var fetchButton: some View {

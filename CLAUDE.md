@@ -38,8 +38,8 @@ Nothing Apple-specific can be built locally without a Mac. GitHub Actions is the
   `docs/screenshots/` on that branch. Pull before the next push. Use it for UI changes only;
   the screenshots are the only way to see the UI without a device.
 - The simulator has no Bluetooth. The app has a demo mode for it: launch arguments
-  `-PokitDemo meter|pro|list`, `-meter.mode <raw value>`, `-PokitDemoScreen modes|ranges|device|log`,
-  `-PokitDemoTool scope|logger`.
+  `-PokitDemo meter|pro|list`, `-meter.mode <raw value>`,
+  `-PokitDemoScreen modes|ranges|device|log|refused`, `-PokitDemoTool scope|logger`.
 - `.github/workflows/testflight.yml` is started by hand (pick the branch to ship) and needs the
   Apple Developer secrets, which are set in this repository. It archives unsigned, then signs
   with Apple's cloud-managed certificate during export and uploads; that works (first upload
@@ -57,11 +57,17 @@ exist on watchOS 10, and read the surrounding code before editing. Swift languag
 - Verified: protocol tests (byte captures from real devices, via dokit), CI builds, UI in the
   simulator on 40 mm and 46 mm, signing and upload to TestFlight.
 - On real hardware: version 0.1.0 was installed through TestFlight and worked against the
-  owner's meter (2026-11-27). Uploaded since, with no report back yet: 0.2.0 (connected only
-  while on screen, complications incl. quick starts) and 0.3.0 (oscilloscope, data logger,
-  diagnostics). Treat all of that as unverified on a device until the owner says otherwise,
-  and say so when reporting. Whether the owner's meter is a Pokit Meter or a Pokit Pro is
-  not known yet; it matters for the logger's layout and for reading diagnostics.
+  owner's meter (2026-11-27). About 0.3.0 (connected only while on screen, complications,
+  oscilloscope, data logger, diagnostics) the owner reported "looks good with both devices",
+  which reads as: they have a Pokit Meter and a Pokit Pro. That is a general verdict, not a
+  feature-by-feature check, so the protocol uncertainties below still stand until something
+  more specific comes back.
+- The one problem reported with 0.3.0: on the Pokit Pro, a mode picked while the switch is in
+  the wrong position is refused ("Mode not available") and stayed refused after the switch
+  was corrected. 0.3.1 answers that with a retry button in place of the range/hold controls
+  (`retryMode`), a restart as soon as Status reports another switch position (`switchMoved`),
+  and an idle command before the retried mode. None of this has been on a device yet, and why
+  the plain repeat every 4 s did not get the mode going is not known.
 - `main` only has what was merged with PR #2 (the Wristmeter rename and docs). Later work sits
   on the work branch until the owner asks for a PR.
 - Offered to the owner, not built: a wrist-down timeout that disconnects independently of
