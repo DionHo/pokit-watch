@@ -85,6 +85,9 @@ niemanden mehr lesbar, auch nicht für dich.
 dauert etwa 10 Minuten: Projekt generieren, archivieren, mit Apples Cloud-Zertifikat signieren,
 hochladen. Danach verarbeitet Apple den Build noch 5–30 Minuten.
 
+Hinweis: GitHub zeigt „Run workflow" nur für Workflows an, die im Standard-Branch (`main`)
+liegen. Solange der Code nur in einem Feature-Branch steckt, diesen zuerst nach `main` mergen.
+
 Tipp: Mit abgewähltem „Upload" prüft der Workflow nur, ob die Signierung klappt.
 
 ### 7. Dich als Tester eintragen
