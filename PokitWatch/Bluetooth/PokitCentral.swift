@@ -159,7 +159,10 @@ final class PokitCentral: NSObject, ObservableObject {
     private var lastNudge = Date.distantPast
     private var lastStatusPoll = Date.distantPast
     private var lastHaptic = Date.distantPast
+    private var lastConnectCheck = Date.distantPast
     private var hadContinuity = false
+    /// Restarts in a row without a single reading in between; slows down the retries.
+    private var consecutiveFailures = 0
 
     // MARK: Lifecycle
 
@@ -170,8 +173,11 @@ final class PokitCentral: NSObject, ObservableObject {
            stored != .idle {
             mode = stored
         }
-        meter.reset(for: mode)
         device = loadRememberedDevice()
+        if let device {
+            reconcileSelection(with: device.product)
+        }
+        meter.reset(for: mode)
 
         if let scenario = defaults.string(forKey: DemoMeter.argument) {
             startDemo(scenario)
@@ -208,6 +214,10 @@ final class PokitCentral: NSObject, ObservableObject {
 
     /// Clears the list and scans again.
     func rescan() {
+        if let demo {
+            demo.showList(central: self)
+            return
+        }
         guard device == nil else { return }
         stopScanning()
         discovered = []
@@ -221,7 +231,10 @@ final class PokitCentral: NSObject, ObservableObject {
             return
         }
         remember(RememberedPokit(id: found.id, name: found.name, product: found.product))
+        range = .auto
+        reconcileSelection(with: found.product)
         meter.reset(for: mode)
+        consecutiveFailures = 0
         beginConnection()
     }
 
@@ -241,13 +254,20 @@ final class PokitCentral: NSObject, ObservableObject {
         status = nil
         details = DeviceDetails()
         discovered = []
+        seenPeripherals.removeAll()
+        consecutiveFailures = 0
         phase = .idle
         if let old {
             // A moment for the idle command to go out before the link is closed.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.central?.cancelPeripheralConnection(old)
+                // Leave it alone if the user picked the same device again in the meantime.
+                guard let self, self.peripheral !== old else { return }
+                self.central?.cancelPeripheralConnection(old)
             }
         }
+        // A scan that is already running does not report the same devices a second time,
+        // so start a fresh one for the now empty list.
+        stopScanning()
         if appIsActive {
             startScanning()
         }
@@ -314,7 +334,11 @@ final class PokitCentral: NSObject, ObservableObject {
         appIsActive = active
         if active {
             markLinkFresh()
-            if phase == .ready {
+            if let peripheral, phase == .ready || phase == .preparing, peripheral.state != .connected {
+                // The link went down while the app was suspended and no callback arrived.
+                linkDown()
+                scheduleReconnect()
+            } else if phase == .ready {
                 applySettings()
                 pollStatus()
             } else {
@@ -324,6 +348,12 @@ final class PokitCentral: NSObject, ObservableObject {
             if phase == .ready {
                 applySettings()
                 meter.isReceiving = false
+                // Ask for a moment of runtime so the idle command is sent before the app is suspended.
+                ProcessInfo.processInfo.performExpiringActivity(withReason: "Stop the meter") { expired in
+                    if !expired {
+                        Thread.sleep(forTimeInterval: 1)
+                    }
+                }
             } else if phase == .scanning, device == nil {
                 stopScanning()
                 phase = .idle
@@ -341,8 +371,21 @@ final class PokitCentral: NSObject, ObservableObject {
             if peripheral == nil || peripheral?.state == .disconnected {
                 beginConnection()
             }
-        } else if appIsActive, phase != .scanning {
+        } else if appIsActive {
             startScanning()
+        }
+    }
+
+    /// Makes mode and range valid for `product`: a mode the product does not have (capacitance
+    /// on a Pokit Meter) or a range index from the other product's table would be rejected.
+    private func reconcileSelection(with product: PokitProduct) {
+        if !product.measurementModes.contains(mode) {
+            mode = .dcVoltage
+            range = .auto
+            defaults.set(Int(mode.rawValue), forKey: Keys.mode)
+            meter.reset(for: mode)
+        } else if case .fixed(let index) = range, product.range(for: mode, index: index) == nil {
+            range = .auto
         }
     }
 
@@ -383,14 +426,21 @@ final class PokitCentral: NSObject, ObservableObject {
     /// Drops the current link and connects again from scratch.
     private func restartConnection() {
         guard let peripheral else { return }
+        consecutiveFailures += 1
         linkDown()
         phase = .connecting
         central?.cancelPeripheralConnection(peripheral)
         // The disconnect callback normally triggers the reconnect; this covers the cases
         // where it does not arrive (e.g. cancelling a connection that was still pending).
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + reconnectDelay + 1.5) { [weak self] in
             self?.resume()
         }
+    }
+
+    /// Half a second normally; up to a few seconds when restarts keep failing, so a device
+    /// that cannot be set up is not hammered with connection attempts.
+    private var reconnectDelay: TimeInterval {
+        min(4, Timing.reconnectDelay * pow(2, Double(min(consecutiveFailures, 4))))
     }
 
     /// Forgets everything tied to the current link. The peripheral itself is kept.
@@ -400,15 +450,20 @@ final class PokitCentral: NSObject, ObservableObject {
         setupDeadline = nil
         torchIsOn = nil
         hadContinuity = false
+        // Battery and switch position may have changed by the time the link is back.
+        status = nil
         if meter.isReceiving {
             meter.isReceiving = false
+        }
+        if meter.modeWasRejected {
+            meter.modeWasRejected = false
         }
     }
 
     private func scheduleReconnect() {
         if device != nil {
             phase = .connecting
-            DispatchQueue.main.asyncAfter(deadline: .now() + Timing.reconnectDelay) { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + reconnectDelay) { [weak self] in
                 self?.resume()
             }
         } else {
@@ -497,6 +552,7 @@ final class PokitCentral: NSObject, ObservableObject {
         // reporting that it is idle.
         guard reading.mode == mode, appIsActive else { return }
         lastMatchingReading = now
+        consecutiveFailures = 0
         if !meter.isReceiving {
             meter.isReceiving = true
         }
@@ -570,7 +626,15 @@ final class PokitCentral: NSObject, ObservableObject {
                 }
             }
 
-        case .idle, .scanning, .connecting:
+        case .connecting:
+            // A pending connection can be dropped without a callback while the app is
+            // suspended. Asking again is harmless when it is still pending.
+            if now.timeIntervalSince(lastConnectCheck) > 5 {
+                lastConnectCheck = now
+                resume()
+            }
+
+        case .idle, .scanning:
             break
         }
     }
@@ -771,7 +835,8 @@ extension PokitCentral: CBCentralManagerDelegate {
 
         // Scanning on behalf of a remembered device whose identifier the system lost.
         if let device, self.peripheral == nil,
-           device.id == found.id || (device.name == found.name && device.product == found.product) {
+           device.id == found.id
+            || (device.product == found.product && (device.name == found.name || device.name == peripheral.name)) {
             remember(RememberedPokit(id: found.id, name: found.name, product: found.product))
             beginConnection()
         }
@@ -817,6 +882,7 @@ extension PokitCentral: CBPeripheralDelegate {
         if let product, var device, device.product != product {
             device.product = product
             remember(device)
+            reconcileSelection(with: product)
         }
 
         pendingServiceDiscoveries = services.count
@@ -884,7 +950,9 @@ extension PokitCentral: CBPeripheralDelegate {
         guard peripheral.identifier == self.peripheral?.identifier else { return }
         if characteristic.uuid == GATT.settings {
             // The Pokit answers a mode it cannot do right now with an error and stays idle.
-            let rejected = error != nil && appIsActive
+            // Only a real answer from the device counts; a write that fails because the link
+            // dropped says nothing about the mode.
+            let rejected = (error as? CBATTError) != nil && appIsActive
             if meter.modeWasRejected != rejected {
                 meter.modeWasRejected = rejected
             }

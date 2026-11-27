@@ -21,6 +21,12 @@ struct DeviceListView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
                 .listRowBackground(Color.clear)
+
+                Button {
+                    pokit.rescan()
+                } label: {
+                    Label("Search again", systemImage: "arrow.clockwise")
+                }
             } else {
                 Section {
                     ForEach(pokit.discovered) { found in
