@@ -157,6 +157,9 @@ jobs:
             shoot "$udid" "$label-5-modes" -PokitDemo pro -meter.mode 1 -PokitDemoScreen modes
             shoot "$udid" "$label-6-ranges-de" -PokitDemo meter -meter.mode 5 -PokitDemoScreen ranges -AppleLanguages "(de)"
             shoot "$udid" "$label-7-device" -PokitDemo pro -PokitDemoScreen device
+            shoot "$udid" "$label-8-scope" -PokitDemo meter -PokitDemoTool scope
+            shoot "$udid" "$label-9-logger-de" -PokitDemo pro -PokitDemoTool logger -AppleLanguages "(de)"
+            shoot "$udid" "$label-10-log" -PokitDemo pro -PokitDemoTool logger -PokitDemoScreen log
             xcrun simctl shutdown "$udid"
           done
           ls -la "$OUT"

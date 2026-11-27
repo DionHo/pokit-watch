@@ -1,9 +1,9 @@
 # Pokit Meter / Pokit Pro BLE protocol reference
 
 A byte-level reference for the Pokit Bluetooth protocol, compiled from the sources below.
-`PokitKit` implements the Status and Multimeter parts; the oscilloscope (DSO) and data logger
-sections are here for whoever adds those. Nothing in this file was verified against a device
-by this project: where the sources disagree or are silent, it says so.
+`PokitKit` implements the Status, Multimeter, oscilloscope (DSO) and data logger parts.
+Nothing in this file was verified against a device by this project: where the sources
+disagree or are silent, it says so.
 
 Citation key:
 

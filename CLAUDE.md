@@ -8,7 +8,8 @@ the Apple Watch. The owner has a Windows PC, an iPhone and an Apple Watch, and *
 - `PokitKit/` – Swift package with the protocol (UUIDs, settings/reading/status encoding, range
   tables, value formatting). No Apple frameworks; unit-tested.
 - `PokitWatch/` – the watch app. `Bluetooth/PokitCentral.swift` is the connection state machine
-  (scan, connect, auto-reconnect, watchdog, background/foreground). `Views/` is SwiftUI.
+  (scan, connect, auto-reconnect, watchdog, background/foreground) and drives the three tools:
+  multimeter, oscilloscope, data logger (`tool`; state in `ToolStates.swift`). `Views/` is SwiftUI.
 - `PokitWidgets/` – WidgetKit extension: complications for the watch face and the Smart Stack.
   They only launch the app, plain or in a given mode (`QuickStartLink` in PokitKit carries the
   mode to `RootView.onOpenURL`); no data is shared with the app (that would need an app group).
@@ -34,7 +35,8 @@ Nothing Apple-specific can be built locally without a Mac. GitHub Actions is the
   `docs/screenshots/` on that branch. Pull before the next push. Use it for UI changes only;
   the screenshots are the only way to see the UI without a device.
 - The simulator has no Bluetooth. The app has a demo mode for it: launch arguments
-  `-PokitDemo meter|pro|list`, `-meter.mode <raw value>`, `-PokitDemoScreen modes|ranges|device`.
+  `-PokitDemo meter|pro|list`, `-meter.mode <raw value>`, `-PokitDemoScreen modes|ranges|device|log`,
+  `-PokitDemoTool scope|logger`.
 - `.github/workflows/testflight.yml` is started by hand (pick the branch to ship) and needs the
   Apple Developer secrets, which are set in this repository. It archives unsigned, then signs
   with Apple's cloud-managed certificate during export and uploads; that works (first upload
@@ -52,6 +54,12 @@ exist on watchOS 10, and read the surrounding code before editing. Swift languag
 - On real hardware: version 0.1.0 was installed through TestFlight and worked against the
   owner's meter (2026-11-27). Everything changed after that is unverified on a device until
   the owner has tried the next TestFlight build; say so when reporting.
+- Oscilloscope and data logger are implemented from the documentation and dokit's byte vectors
+  only; whether a real device behaves as assumed (order of Metadata and samples, the Pro's
+  sample counts, what a multimeter command does to a running log) is unverified until the
+  owner has tried them. The app never writes a multimeter or oscilloscope command while the
+  logger reports that it is recording, and after connecting it waits for the logger's state
+  before the first command; keep it that way.
 - The link to the meter exists only while the app is on screen (`setAppActive` in
   `PokitCentral`, driven by `scenePhase`): going to the background writes idle and
   disconnects, becoming active reconnects. The owner asked for this to spare the meter's

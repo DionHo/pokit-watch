@@ -1,6 +1,16 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "%lld samples": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Messwerte"
+          }
+        }
+      }
+    },
     "AC Current": {
       "localizations": {
         "de": {
@@ -61,6 +71,16 @@
         }
       }
     },
+    "Average": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mittelwert"
+          }
+        }
+      }
+    },
     "Battery": {
       "localizations": {
         "de": {
@@ -107,6 +127,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kapazität"
+          }
+        }
+      }
+    },
+    "Capture failed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfassung fehlgeschlagen"
+          }
+        }
+      }
+    },
+    "Capturing…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfasse …"
           }
         }
       }
@@ -181,6 +221,16 @@
         }
       }
     },
+    "Could not start": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start fehlgeschlagen"
+          }
+        }
+      }
+    },
     "DC Current": {
       "localizations": {
         "de": {
@@ -197,6 +247,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Gleichspannung"
+          }
+        }
+      }
+    },
+    "Data Logger": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datenlogger"
           }
         }
       }
@@ -247,6 +307,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ext. Temperatur"
+          }
+        }
+      }
+    },
+    "Falling edge": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fallende Flanke"
           }
         }
       }
@@ -321,12 +391,72 @@
         }
       }
     },
+    "Interval": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intervall"
+          }
+        }
+      }
+    },
     "Level": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Ladestand"
+          }
+        }
+      }
+    },
+    "Load data": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daten laden"
+          }
+        }
+      }
+    },
+    "Logging": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufzeichnung läuft"
+          }
+        }
+      }
+    },
+    "Logging continues on the Pokit when you leave the app. Stop it to measure again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Aufzeichnung läuft auf dem Pokit weiter, auch wenn du die App verlässt. Beende sie, um wieder zu messen."
+          }
+        }
+      }
+    },
+    "Maximum": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maximum"
+          }
+        }
+      }
+    },
+    "Minimum": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimum"
           }
         }
       }
@@ -381,12 +511,32 @@
         }
       }
     },
+    "No samples yet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch keine Messwerte"
+          }
+        }
+      }
+    },
     "Not supported": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Nicht unterstützt"
+          }
+        }
+      }
+    },
+    "Off": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus"
           }
         }
       }
@@ -401,12 +551,32 @@
         }
       }
     },
+    "Oscilloscope": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oszilloskop"
+          }
+        }
+      }
+    },
     "Other device": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Anderes Gerät"
+          }
+        }
+      }
+    },
+    "Quantity": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messgröße"
           }
         }
       }
@@ -421,12 +591,42 @@
         }
       }
     },
+    "Recorded data": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufgezeichnete Daten"
+          }
+        }
+      }
+    },
     "Resistance": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Widerstand"
+          }
+        }
+      }
+    },
+    "Rising edge": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steigende Flanke"
+          }
+        }
+      }
+    },
+    "Samples": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messwerte"
           }
         }
       }
@@ -481,12 +681,52 @@
         }
       }
     },
+    "Signal": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signal"
+          }
+        }
+      }
+    },
+    "Start logging": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufzeichnung starten"
+          }
+        }
+      }
+    },
+    "Started": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gestartet"
+          }
+        }
+      }
+    },
     "Status": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Status"
+          }
+        }
+      }
+    },
+    "Stop": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopp"
           }
         }
       }
@@ -541,12 +781,32 @@
         }
       }
     },
+    "Time span": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeitfenster"
+          }
+        }
+      }
+    },
     "Torch": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Taschenlampe"
+          }
+        }
+      }
+    },
+    "Trigger": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trigger"
           }
         }
       }
@@ -597,6 +857,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Warte auf Daten …"
+          }
+        }
+      }
+    },
+    "Waiting for trigger…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warte auf Trigger …"
           }
         }
       }

@@ -5,9 +5,9 @@ enum Route: Hashable {
     case device
 }
 
-/// Decides which of the three top-level screens is shown: a Bluetooth problem, the device
-/// list, or the meter. Once a device is remembered the meter screen stays up, also while
-/// the connection is being (re-)established.
+/// Decides which top-level screen is shown: a Bluetooth problem, the device list, or the
+/// tool in use (meter, oscilloscope or data logger). Once a device is remembered the tool's
+/// screen stays up, also while the connection is being (re-)established.
 struct RootView: View {
     @EnvironmentObject private var pokit: PokitCentral
     @Environment(\.scenePhase) private var scenePhase
@@ -37,10 +37,17 @@ struct RootView: View {
                         message: "This watch cannot connect to Bluetooth accessories."
                     )
                 case .unknown, .ready:
-                    if pokit.device != nil {
-                        MeterView(meter: pokit.meter)
-                    } else {
+                    if pokit.device == nil {
                         DeviceListView()
+                    } else {
+                        switch pokit.tool {
+                        case .meter:
+                            MeterView(meter: pokit.meter)
+                        case .scope:
+                            ScopeView(scope: pokit.scope)
+                        case .logger:
+                            LoggerView(logger: pokit.logger)
+                        }
                     }
                 }
             }
@@ -73,9 +80,10 @@ struct RootView: View {
         .onOpenURL { url in
             guard let mode = QuickStartLink.mode(from: url) else { return }
             path.removeAll()
-            // Already in that mode: leave hold and min/max alone. With no device chosen yet
-            // the mode is kept for when one is.
-            if pokit.mode != mode, pokit.device?.product.measurementModes.contains(mode) != false {
+            // Already measuring in that mode: leave hold and min/max alone. With no device
+            // chosen yet the mode is kept for when one is.
+            let isCurrent = pokit.tool == .meter && pokit.mode == mode
+            if !isCurrent, pokit.device?.product.measurementModes.contains(mode) != false {
                 pokit.select(mode: mode)
             }
         }
