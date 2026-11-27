@@ -216,13 +216,6 @@ final class PokitCentral: NSObject, ObservableObject {
 
     /// The last multimeter command noted in the diagnostics, to keep repeats out of them.
     private var lastNotedMeterWrite: Data?
-    /// Modes of the multimeter commands the device has not answered yet, oldest first.
-    /// Answers come in the order of the writes, so this tells which command one belongs to.
-    private var unansweredMeterWrites: [MultimeterMode] = []
-    /// The user just asked for a mode and is waiting to see what becomes of it.
-    private var userAwaitsMode = false
-    /// Note the next answer to a mode command in the diagnostics, whatever it is.
-    private var noteNextMeterAnswer = false
     /// A running oscilloscope produces several captures a second; only the first few after
     /// a change are noted, so they do not push everything else out of the diagnostics.
     private var scopeNoteBudget = 0
@@ -363,7 +356,6 @@ final class PokitCentral: NSObject, ObservableObject {
         }
         meter.reset(for: newMode)
         hadContinuity = false
-        userAwaitsMode = true
         markLinkFresh()
         applySettings()
     }
@@ -372,27 +364,8 @@ final class PokitCentral: NSObject, ObservableObject {
         range = newRange
         meter.statistics.reset()
         meter.modeWasRejected = false
-        userAwaitsMode = true
         markLinkFresh()
         applySettings()
-    }
-
-    /// Tries again to start the selected mode after the device refused it. On a Pokit Pro
-    /// the usual reason is its switch being in a position that does not suit the mode.
-    func retryMode() {
-        guard tool == .meter else { return }
-        demo?.refusesMode = false
-        diagnostics.add("retry")
-        // A fixed range may be what the device objects to, and the range control is not on
-        // screen while the mode is refused.
-        range = .auto
-        meter.reset(for: mode)
-        hadContinuity = false
-        userAwaitsMode = true
-        markLinkFresh()
-        restartMeasurement()
-        // What the screen says about the switch should be up to date as well.
-        pollStatus()
     }
 
     func toggleHold() {
@@ -423,13 +396,6 @@ final class PokitCentral: NSObject, ObservableObject {
 
     var hasTorch: Bool {
         phase == .ready && characteristics[GATT.torch] != nil
-    }
-
-    /// The switch on a Pokit Pro is in a position that is not expected to work for `mode`.
-    /// Always `false` for a device without a switch.
-    func switchMismatches(_ mode: MultimeterMode) -> Bool {
-        guard let position = status?.switchPosition else { return false }
-        return !position.isExpectedToSupport(mode)
     }
 
     // MARK: Tools
@@ -741,8 +707,6 @@ final class PokitCentral: NSObject, ObservableObject {
         if meter.modeWasRejected {
             meter.modeWasRejected = false
         }
-        unansweredMeterWrites.removeAll()
-        noteNextMeterAnswer = false
     }
 
     private func scheduleReconnect() {
@@ -890,16 +854,6 @@ final class PokitCentral: NSObject, ObservableObject {
         lastNudge = Date()
     }
 
-    /// Starts the selected mode from idle, for when the device refused it or stopped
-    /// measuring. Whether a Pokit needs the idle command in between is not known; it is
-    /// what a fresh start looks like, and a refusal leaves the device idle anyway.
-    private func restartMeasurement() {
-        guard phase == .ready, appIsActive, tool == .meter, !awaitingStartup else { return }
-        noteNextMeterAnswer = true
-        write(.idle)
-        applySettings()
-    }
-
     private func write(_ settings: MultimeterSettings) {
         guard let peripheral, let characteristic = characteristics[GATT.settings] else { return }
         let data = settings.encoded()
@@ -907,51 +861,7 @@ final class PokitCentral: NSObject, ObservableObject {
             lastNotedMeterWrite = data
             diagnostics.add("mm write \(DiagnosticsLog.hex(data))")
         }
-        let type = writeType(for: characteristic)
-        if type == .withResponse {
-            unansweredMeterWrites.append(settings.mode)
-        }
-        peripheral.writeValue(data, for: characteristic, type: type)
-    }
-
-    /// The device answered a multimeter command. A mode it cannot do right now (on a Pokit
-    /// Pro: not in this position of its switch) is answered with an error, and the device
-    /// stays idle.
-    private func handleMeterAnswer(for answered: MultimeterMode, error: Error?) {
-        // Stopping always works, and the answer for a mode that is no longer the selected
-        // one says nothing about the one that is.
-        guard answered == mode, answered != .idle, tool == .meter, appIsActive else { return }
-        let attError = error as? CBATTError
-        // Only a real answer from the device counts; a write that fails because the link
-        // dropped says nothing about the mode.
-        guard error == nil || attError != nil else { return }
-
-        let refused = attError != nil
-        // The watchdog repeats a refused command every few seconds. Only changes are noted,
-        // or the repeats would push everything else out of the diagnostics.
-        if refused != meter.modeWasRejected || noteNextMeterAnswer {
-            if let attError {
-                diagnostics.add("mm refused (ATT \(attError.code.rawValue))")
-            } else {
-                diagnostics.add("mm accepted")
-            }
-        }
-        noteNextMeterAnswer = false
-        if refused, userAwaitsMode {
-            WKInterfaceDevice.current().play(.failure)
-        }
-        userAwaitsMode = false
-        if meter.modeWasRejected != refused {
-            meter.modeWasRejected = refused
-        }
-    }
-
-    /// The switch on a Pokit Pro was moved. If the selected mode is not running, that may be
-    /// what it was waiting for: the user picked the mode first and set the switch second.
-    private func switchMoved(to position: SwitchPosition) {
-        diagnostics.add("switch \(position.rawValue)")
-        guard tool == .meter, meter.modeWasRejected || !meter.isReceiving else { return }
-        restartMeasurement()
+        peripheral.writeValue(data, for: characteristic, type: writeType(for: characteristic))
     }
 
     private func writeType(for characteristic: CBCharacteristic) -> CBCharacteristicWriteType {
@@ -1364,11 +1274,6 @@ final class PokitCentral: NSObject, ObservableObject {
                     if let peripheral, let characteristic = characteristics[GATT.reading] {
                         peripheral.readValue(for: characteristic)
                     }
-                    if meter.modeWasRejected {
-                        // Should the device not announce that its switch was moved while it
-                        // is idle, this finds out; see `switchMoved`.
-                        pollStatus()
-                    }
                 }
             }
 
@@ -1418,14 +1323,12 @@ final class PokitCentral: NSObject, ObservableObject {
 /// A made-up meter for the simulator, which has no Bluetooth. Launch the app with
 /// `-PokitDemo meter`, `-PokitDemo pro` or `-PokitDemo list` to try the UI or take screenshots;
 /// add `-meter.mode 7` (a `MultimeterMode` raw value) to start in a particular mode and
-/// `-PokitDemoScreen modes|ranges|device|refused` to open one of the sub-screens right away.
+/// `-PokitDemoScreen modes|ranges|device` to open one of the sub-screens right away.
 private final class DemoMeter {
     static let argument = "PokitDemo"
 
     private var timer: Timer?
     private var step = 0
-    /// `-PokitDemoScreen refused` shows what a mode looks like that the device will not start.
-    var refusesMode = UserDefaults.standard.string(forKey: "PokitDemoScreen") == "refused"
 
     func connect(to found: DiscoveredPokit, central: PokitCentral) {
         central.demoShowMeter(RememberedPokit(id: found.id, name: found.name, product: found.product))
@@ -1560,11 +1463,10 @@ extension PokitCentral {
             ? Data([0x02, 0x64, 0x3B, 0x83, 0x40, 0x01, 0x00, 0x00])
             : Data([0x00, 0x25, 0x07, 0x33, 0x40]))
         phase = .ready
-        meter.modeWasRejected = demo?.refusesMode == true
     }
 
     fileprivate func demoFeed(_ data: Data) {
-        guard phase == .ready, demo?.refusesMode != true else { return }
+        guard phase == .ready else { return }
         handleReading(data)
     }
 
@@ -1749,11 +1651,7 @@ extension PokitCentral: CBPeripheralDelegate {
             handleLoggerSamples(data)
         case GATT.status:
             if let newStatus = DeviceStatus(data: data), newStatus != status {
-                let oldPosition = status?.switchPosition
                 status = newStatus
-                if let position = newStatus.switchPosition, let oldPosition, position != oldPosition {
-                    switchMoved(to: position)
-                }
             }
         case GATT.deviceCharacteristics:
             details.characteristics = DeviceCharacteristics(data: data)
@@ -1793,8 +1691,16 @@ extension PokitCentral: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
         guard peripheral.identifier == self.peripheral?.identifier else { return }
         if characteristic.uuid == GATT.settings {
-            let answered = unansweredMeterWrites.isEmpty ? mode : unansweredMeterWrites.removeFirst()
-            handleMeterAnswer(for: answered, error: error)
+            // The Pokit answers a mode it cannot do right now with an error and stays idle.
+            // Only a real answer from the device counts; a write that fails because the link
+            // dropped says nothing about the mode.
+            let rejected = (error as? CBATTError) != nil && appIsActive
+            if let attError = error as? CBATTError {
+                diagnostics.add("mm write refused (ATT \(attError.code.rawValue))")
+            }
+            if meter.modeWasRejected != rejected {
+                meter.modeWasRejected = rejected
+            }
         } else if characteristic.uuid == GATT.torch, error != nil {
             peripheral.readValue(for: characteristic)
         } else if characteristic.uuid == GATT.dsoSettings, let attError = error as? CBATTError {

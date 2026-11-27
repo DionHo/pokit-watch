@@ -160,7 +160,6 @@ jobs:
             shoot "$udid" "$label-8-scope" -PokitDemo meter -PokitDemoTool scope
             shoot "$udid" "$label-9-logger-de" -PokitDemo pro -PokitDemoTool logger -AppleLanguages "(de)"
             shoot "$udid" "$label-10-log" -PokitDemo pro -PokitDemoTool logger -PokitDemoScreen log
-            shoot "$udid" "$label-11-refused-de" -PokitDemo pro -meter.mode 5 -PokitDemoScreen refused -AppleLanguages "(de)"
             xcrun simctl shutdown "$udid"
           done
           ls -la "$OUT"

@@ -44,9 +44,6 @@ public enum PokitProduct: String, CaseIterable, Sendable, Codable {
     /// The Pokit Pro has a torch, a button and a physical mode switch.
     public var hasTorch: Bool { self == .pro }
 
-    /// The switch has to be in a position that suits the measurement, see `SwitchPosition`.
-    public var hasModeSwitch: Bool { self == .pro }
-
     /// Selectable ranges for `mode`, lowest first. Empty for modes without ranges.
     public func ranges(for mode: MultimeterMode) -> [MeterRange] {
         let limits: [Double]

@@ -38,8 +38,8 @@ Nothing Apple-specific can be built locally without a Mac. GitHub Actions is the
   `docs/screenshots/` on that branch. Pull before the next push. Use it for UI changes only;
   the screenshots are the only way to see the UI without a device.
 - The simulator has no Bluetooth. The app has a demo mode for it: launch arguments
-  `-PokitDemo meter|pro|list`, `-meter.mode <raw value>`,
-  `-PokitDemoScreen modes|ranges|device|log|refused`, `-PokitDemoTool scope|logger`.
+  `-PokitDemo meter|pro|list`, `-meter.mode <raw value>`, `-PokitDemoScreen modes|ranges|device|log`,
+  `-PokitDemoTool scope|logger`.
 - `.github/workflows/testflight.yml` is started by hand (pick the branch to ship) and needs the
   Apple Developer secrets, which are set in this repository. It archives unsigned, then signs
   with Apple's cloud-managed certificate during export and uploads; that works (first upload
@@ -56,27 +56,26 @@ exist on watchOS 10, and read the surrounding code before editing. Swift languag
 
 - Verified: protocol tests (byte captures from real devices, via dokit), CI builds, UI in the
   simulator on 40 mm and 46 mm, signing and upload to TestFlight.
-- On real hardware: version 0.1.0 was installed through TestFlight and worked against the
-  owner's meter (2026-11-27). About 0.3.0 (connected only while on screen, complications,
-  oscilloscope, data logger, diagnostics) the owner reported "looks good with both devices",
-  which reads as: they have a Pokit Meter and a Pokit Pro. That is a general verdict, not a
-  feature-by-feature check, so the protocol uncertainties below still stand until something
-  more specific comes back.
-- The one problem reported with 0.3.0: on the Pokit Pro, a mode picked while the switch is in
-  the wrong position is refused ("Mode not available") and stayed refused after the switch
-  was corrected. 0.3.1 answers that with a retry button in place of the range/hold controls
-  (`retryMode`), a restart as soon as Status reports another switch position (`switchMoved`),
-  and an idle command before the retried mode. Why the plain repeat every 4 s did not get the
-  mode going is not known.
-- 0.3.1 on the owner's watch (2026-11-27): "only a black screen after a device was detected".
-  Cause not found. Reading the 0.3.0 -> 0.3.1 diff shows nothing that runs differently on a
-  normal connect, and no view can be empty, so it looks like a hang or crash on a path only a
-  real device takes (refused mode at connect, switch change) or something outside the diff.
-  Open questions to the owner: whole screen black or only the content (toolbar still there),
-  which device, the Pro's switch position, and whether 0.3.0 (TestFlight, previous builds)
-  still works. Do not ship further guesses on top of 0.3.1 before that is answered.
-- `main` only has what was merged with PR #2 (the Wristmeter rename and docs). Later work sits
-  on the work branch until the owner asks for a PR.
+- On real hardware: the owner has a Pokit Meter and a Pokit Pro. Version 0.3.0 (connected
+  only while on screen, complications incl. quick starts, oscilloscope, data logger,
+  diagnostics) "works flawlessly" with both (2026-11-27). That is a general verdict, not a
+  feature-by-feature check, so the protocol uncertainties below stand until something more
+  specific comes back.
+- Pokit Pro and its switch, as observed by the owner with 0.3.0: a mode picked in the wrong
+  switch position is refused ("Mode not available"); once the switch is corrected the mode
+  starts by itself after a few seconds (the watchdog repeats the command every 4 s), or when
+  hold is used. Moving the switch during a measurement shows "Check the switch on the Pokit"
+  and the measurement carries on when the switch is back. The owner is content with this.
+- 0.3.1 was a mistake and is reverted: it added a retry button for a refused mode, a restart
+  when Status reports another switch position, an idle command before the retry and a queue
+  matching write answers to commands, all to fix a problem that turned out not to exist. On
+  the owner's watch it showed only a black screen once a device was detected. The cause was
+  never found (nothing in the diff runs differently on a normal connect, and the simulator
+  showed the screens fine). If any of it is wanted again, start over in small steps and have
+  each one tried on the watch. The 0.3.1 build is still listed in TestFlight, so the next
+  version has to be 0.3.2 or higher to sort above it.
+- `main` has everything up to and including 0.3.0 (PR #2: rename and docs, PR #3: the rest).
+  New work goes on the work branch and reaches `main` when the owner asks for it.
 - Offered to the owner, not built: a wrist-down timeout that disconnects independently of
   watchOS's "Return to Clock" setting; quick-start complications for more modes.
 - Oscilloscope and data logger are implemented from the documentation and dokit's byte vectors
@@ -97,8 +96,8 @@ exist on watchOS 10, and read the surrounding code before editing. Swift languag
 ## Conventions
 
 - Code, comments, README and commit messages are in English; `docs/DEPLOYMENT.md` is in
-  German. Talk to the owner in the language of their last message (German at first, English
-  lately). UI strings are English in code, with German in
+  German. Talk to the owner in the language of their last message (they switch between
+  German and English). UI strings are English in code, with German in
   `Localizable.xcstrings` (keep both catalogs in step when adding strings; mode titles from
   `MultimeterMode.title` are localisation keys too).
 - Comments explain why, not what.

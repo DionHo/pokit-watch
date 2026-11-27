@@ -130,33 +130,22 @@ struct MeterView: View {
 
     private var controls: some View {
         HStack(spacing: 6) {
-            if meter.modeWasRejected {
-                // Nothing is being measured, so there is nothing to range or to hold. What
-                // is left to do is to remove the reason and ask the device again.
+            if pokit.mode.hasRanges {
                 Button {
-                    pokit.retryMode()
+                    showsRanges = true
                 } label: {
-                    Text(retryTitle)
+                    Text(verbatim: rangeText)
                 }
-                .buttonStyle(PillButtonStyle(tint: .orange))
-            } else {
-                if pokit.mode.hasRanges {
-                    Button {
-                        showsRanges = true
-                    } label: {
-                        Text(verbatim: rangeText)
-                    }
-                    .buttonStyle(PillButtonStyle())
-                }
-                Button {
-                    pokit.toggleHold()
-                } label: {
-                    Image(systemName: meter.isHolding ? "play.fill" : "pause.fill")
-                }
-                .buttonStyle(PillButtonStyle(tint: meter.isHolding ? .yellow : .white))
-                .frame(maxWidth: pokit.mode.hasRanges ? (isCompact ? 40 : 52) : .infinity)
-                .accessibilityLabel(Text("Hold"))
+                .buttonStyle(PillButtonStyle())
             }
+            Button {
+                pokit.toggleHold()
+            } label: {
+                Image(systemName: meter.isHolding ? "play.fill" : "pause.fill")
+            }
+            .buttonStyle(PillButtonStyle(tint: meter.isHolding ? .yellow : .white))
+            .frame(maxWidth: pokit.mode.hasRanges ? (isCompact ? 40 : 52) : .infinity)
+            .accessibilityLabel(Text("Hold"))
         }
     }
 
@@ -168,13 +157,8 @@ struct MeterView: View {
     }
 
     private var switchMismatch: Bool {
-        pokit.switchMismatches(pokit.mode)
-    }
-
-    /// A Pokit Pro refuses a mode that its switch is not set for, which is by far the most
-    /// likely reason there. A Pokit Meter has no switch.
-    private var retryTitle: LocalizedStringKey {
-        pokit.device?.product.hasModeSwitch == true ? "Check switch position" : "Try again"
+        guard let position = pokit.status?.switchPosition else { return false }
+        return !position.isExpectedToSupport(pokit.mode)
     }
 
     private var hasContinuity: Bool {
