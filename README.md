@@ -2,10 +2,11 @@
 
 Use a [Pokit](https://www.pokitinnovations.com/) multimeter on the Apple Watch directly, without a phone.
 
-The watch app talks to a **Pokit Meter** or **Pokit Pro** over Bluetooth LE and shows the reading
-on your wrist. The iPhone is only needed to install the app.
+The watch app, called **Wristmeter**, talks to a **Pokit Meter** or **Pokit Pro** over Bluetooth LE
+and shows the reading on your wrist. The iPhone is only needed to install the app.
 
-> Unofficial project, not affiliated with Pokit Innovations. Measuring mains or other dangerous
+> Unofficial project, not affiliated with or endorsed by Pokit Innovations. "Pokit" is their
+> trademark and is used here only to say which meters the app works with. Measuring mains or other dangerous
 > voltages is at your own risk; the watch is a display, not a safety device.
 
 <p>
@@ -36,7 +37,7 @@ if the link is really dead, reconnects from scratch.
 
 ## Using it
 
-1. Switch the Pokit on and open **Pokit** on the watch.
+1. Switch the Pokit on and open **Wristmeter** on the watch.
 2. Tap your meter in the list. From then on the app connects to it automatically.
 3. Tap the mode line at the top to change the mode, the range button to change the range,
    the value (or the pause button) to hold. The battery icon opens the device page.
@@ -44,7 +45,7 @@ if the link is really dead, reconnects from scratch.
 Tips:
 
 - watchOS returns to the watch face after a while. To keep the meter in front, set
-  *Settings › General › Return to Clock › Pokit* to *After 1 hour* on the watch.
+  *Settings › General › Return to Clock › Wristmeter* to *After 1 hour* on the watch.
 - When the app goes to the background the meter is put into idle to save its battery;
   measuring resumes when you raise your wrist.
 - Pokit Pro: the physical switch on the device decides which modes work. The app shows a hint

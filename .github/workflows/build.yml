@@ -76,12 +76,12 @@ jobs:
 
       - name: Check that the watch app is embedded
         run: |
-          APP="$RUNNER_TEMP/PokitWatch.xcarchive/Products/Applications/Pokit Watch.app"
+          APP="$RUNNER_TEMP/PokitWatch.xcarchive/Products/Applications/Wristmeter.app"
           find "$RUNNER_TEMP/PokitWatch.xcarchive/Products" -maxdepth 4 -name "*.app" -print
-          test -d "$APP/Watch/Pokit.app"
-          test -d "$APP/Watch/Pokit.app/de.lproj"
-          test -f "$APP/Watch/Pokit.app/PrivacyInfo.xcprivacy"
-          /usr/libexec/PlistBuddy -c "Print" "$APP/Watch/Pokit.app/Info.plist"
+          test -d "$APP/Watch/WristmeterWatch.app"
+          test -d "$APP/Watch/WristmeterWatch.app/de.lproj"
+          test -f "$APP/Watch/WristmeterWatch.app/PrivacyInfo.xcprivacy"
+          /usr/libexec/PlistBuddy -c "Print" "$APP/Watch/WristmeterWatch.app/Info.plist"
 
       # For installing without the Apple Developer Program: tools such as WatchBridge or
       # Sideloadly re-sign this package with a personal Apple ID (valid for 7 days).
@@ -89,17 +89,17 @@ jobs:
       # identifiers used for TestFlight.
       - name: Package an unsigned IPA
         run: |
-          SRC="$RUNNER_TEMP/PokitWatch.xcarchive/Products/Applications/Pokit Watch.app"
+          SRC="$RUNNER_TEMP/PokitWatch.xcarchive/Products/Applications/Wristmeter.app"
           WORK="$RUNNER_TEMP/sideload"
           mkdir -p "$WORK/Payload"
           cp -R "$SRC" "$WORK/Payload/"
-          APP="$WORK/Payload/Pokit Watch.app"
+          APP="$WORK/Payload/Wristmeter.app"
           ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist").sideload"
           /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $ID" "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $ID.watchkitapp" "$APP/Watch/Pokit.app/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :WKCompanionAppBundleIdentifier $ID" "$APP/Watch/Pokit.app/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $ID.watchkitapp" "$APP/Watch/WristmeterWatch.app/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :WKCompanionAppBundleIdentifier $ID" "$APP/Watch/WristmeterWatch.app/Info.plist"
           (cd "$WORK" && zip -qry "$RUNNER_TEMP/PokitWatch-unsigned.ipa" Payload)
-          unzip -l "$RUNNER_TEMP/PokitWatch-unsigned.ipa" | grep -E "Info.plist|Pokit$|Pokit Watch$" || true
+          unzip -l "$RUNNER_TEMP/PokitWatch-unsigned.ipa" | grep -E "Info.plist|Wristmeter$|WristmeterWatch$" || true
           ls -la "$RUNNER_TEMP/PokitWatch-unsigned.ipa"
 
       - name: Upload unsigned IPA
@@ -115,7 +115,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 15
         run: |
-          APP="$RUNNER_TEMP/dd/Build/Products/Debug-watchsimulator/Pokit.app"
+          APP="$RUNNER_TEMP/dd/Build/Products/Debug-watchsimulator/WristmeterWatch.app"
           BUNDLE=io.github.dionho.pokitwatch.watchkitapp
           OUT="$RUNNER_TEMP/screenshots"
           mkdir -p "$OUT"

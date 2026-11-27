@@ -28,7 +28,7 @@ struct HostInfoView: View {
                     .foregroundStyle(.tint)
                     .padding(.top, 48)
 
-                Text("Pokit Watch")
+                Text("Wristmeter")
                     .font(.largeTitle.bold())
 
                 Text("This app runs on your Apple Watch. It connects to a Pokit Meter or Pokit Pro directly from the watch, so the iPhone is not needed while measuring.")
@@ -36,8 +36,8 @@ struct HostInfoView: View {
                     .foregroundStyle(.secondary)
 
                 VStack(alignment: .leading, spacing: 14) {
-                    Label("Open the Watch app on this iPhone and install “Pokit” under Available Apps if it is not on your watch yet.", systemImage: "1.circle.fill")
-                    Label("Start Pokit on the watch and switch your meter on.", systemImage: "2.circle.fill")
+                    Label("Open the Watch app on this iPhone and install “Wristmeter” under Available Apps if it is not on your watch yet.", systemImage: "1.circle.fill")
+                    Label("Start Wristmeter on the watch and switch your meter on.", systemImage: "2.circle.fill")
                     Label("Pick the meter from the list. The watch remembers it and reconnects on its own next time.", systemImage: "3.circle.fill")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

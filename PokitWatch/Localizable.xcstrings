@@ -411,16 +411,6 @@
         }
       }
     },
-    "Pokit": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pokit"
-          }
-        }
-      }
-    },
     "Range": {
       "localizations": {
         "de": {
@@ -607,6 +597,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Warte auf Daten …"
+          }
+        }
+      }
+    },
+    "Wristmeter": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wristmeter"
           }
         }
       }

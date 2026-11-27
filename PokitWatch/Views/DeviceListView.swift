@@ -59,7 +59,7 @@ struct DeviceListView: View {
                 }
             }
         }
-        .navigationTitle("Pokit")
+        .navigationTitle("Wristmeter")
         .onAppear {
             pokit.startScanning()
         }

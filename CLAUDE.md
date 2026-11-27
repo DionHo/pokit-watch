@@ -55,4 +55,7 @@ exist on watchOS 10, and read the surrounding code before editing. Swift languag
   `MultimeterMode.title` are localisation keys too).
 - Comments explain why, not what.
 - Never commit signing material (`.p8`, `.p12`, profiles) or Apple ID details.
-- Unofficial project: no Pokit branding or assets.
+- Unofficial project: no Pokit branding or assets. The app is called **Wristmeter** (App Store
+  Connect record, home-screen name on phone and watch). "Pokit" is a registered trademark of
+  Pokit Innovations: use it only to refer to the meters ("works with Pokit Meter"), never as
+  or in the app's own name. Repo, target, folder and bundle-ID names are internal and stay.

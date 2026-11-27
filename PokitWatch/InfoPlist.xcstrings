@@ -8,13 +8,13 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pokit verbindet sich per Bluetooth mit deinem Pokit Meter oder Pokit Pro, um dessen Messwerte anzuzeigen."
+            "value": "Wristmeter verbindet sich per Bluetooth mit deinem Pokit Meter oder Pokit Pro, um dessen Messwerte anzuzeigen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "new",
-            "value": "Pokit connects to your Pokit Meter or Pokit Pro over Bluetooth to show its measurements."
+            "value": "Wristmeter connects to your Pokit Meter or Pokit Pro over Bluetooth to show its measurements."
           }
         }
       }
