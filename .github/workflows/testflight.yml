@@ -150,7 +150,7 @@ jobs:
           UPLOAD: ${{ inputs.upload }}
         run: |
           {
-            echo "### Pokit Watch build $BUILD_NUMBER"
+            echo "### Wristmeter build $BUILD_NUMBER"
             if [ "$UPLOAD" = "true" ]; then
               echo "Uploaded to App Store Connect. Processing takes 5–30 minutes; after that the build shows up in TestFlight."
             else

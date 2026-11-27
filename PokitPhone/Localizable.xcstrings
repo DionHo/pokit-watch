@@ -1,12 +1,12 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "Open the Watch app on this iPhone and install “Pokit” under Available Apps if it is not on your watch yet.": {
+    "Open the Watch app on this iPhone and install “Wristmeter” under Available Apps if it is not on your watch yet.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Öffne die Watch-App auf diesem iPhone und installiere „Pokit“ unter „Verfügbare Apps“, falls sie noch nicht auf deiner Uhr ist."
+            "value": "Öffne die Watch-App auf diesem iPhone und installiere „Wristmeter“ unter „Verfügbare Apps“, falls sie noch nicht auf deiner Uhr ist."
           }
         }
       }
@@ -21,22 +21,12 @@
         }
       }
     },
-    "Pokit Watch": {
+    "Start Wristmeter on the watch and switch your meter on.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pokit Watch"
-          }
-        }
-      }
-    },
-    "Start Pokit on the watch and switch your meter on.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Starte Pokit auf der Uhr und schalte dein Messgerät ein."
+            "value": "Starte Wristmeter auf der Uhr und schalte dein Messgerät ein."
           }
         }
       }
@@ -67,6 +57,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Version %@"
+          }
+        }
+      }
+    },
+    "Wristmeter": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wristmeter"
           }
         }
       }

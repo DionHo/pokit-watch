@@ -29,8 +29,8 @@ Privatperson („Individual") dauert die Freischaltung meist wenige Stunden bis 
 
 <https://developer.apple.com/account/resources/identifiers/list> › **+** › *App IDs* › *App*:
 
-1. Description `Pokit Watch`, Bundle ID *Explicit*: `io.github.dionho.pokitwatch`
-2. Noch einmal für die Watch-App: Description `Pokit Watch Watch App`, Bundle ID
+1. Description `Wristmeter`, Bundle ID *Explicit*: `io.github.dionho.pokitwatch`
+2. Noch einmal für die Watch-App: Description `Wristmeter Watch App`, Bundle ID
    `io.github.dionho.pokitwatch.watchkitapp`
 
 Capabilities müssen keine angehakt werden (Bluetooth braucht keine).
@@ -40,7 +40,9 @@ Capabilities müssen keine angehakt werden (Bluetooth braucht keine).
 <https://appstoreconnect.apple.com/apps> › **+** › *Neue App*:
 
 - Plattform: **iOS**
-- Name: frei wählbar, muss aber im ganzen App Store eindeutig sein, z. B. `Pokit Watch DionHo`
+- Name: frei wählbar, muss aber im ganzen App Store eindeutig sein. `Wristmeter` ist durch
+  dieses Projekt belegt; wer forkt, nimmt z. B. `Wristmeter <dein Name>`. „Pokit“ gehört als
+  Marke von Pokit Innovations nicht in den App-Namen.
 - Primäre Sprache: Deutsch oder Englisch
 - Bundle-ID: `io.github.dionho.pokitwatch` auswählen
 - SKU: beliebig, z. B. `pokitwatch`
@@ -82,7 +84,7 @@ niemanden mehr lesbar, auch nicht für dich.
 ### 6. Workflow starten
 
 *Actions › TestFlight › Run workflow* (Branch auswählen, „Upload" angehakt lassen). Der Lauf
-dauert etwa 10 Minuten: Projekt generieren, archivieren, mit Apples Cloud-Zertifikat signieren,
+dauert etwa 3 Minuten: Projekt generieren, archivieren, mit Apples Cloud-Zertifikat signieren,
 hochladen. Danach verarbeitet Apple den Build noch 5–30 Minuten.
 
 Hinweis: GitHub zeigt „Run workflow" nur für Workflows an, die im Standard-Branch (`main`)
@@ -99,12 +101,12 @@ Interne Tests brauchen keine Prüfung durch Apple.
 ### 8. Installieren
 
 1. **TestFlight** aus dem App Store auf dem iPhone installieren und mit deiner Apple-ID
-   anmelden. „Pokit Watch" erscheint dort › *Installieren*.
+   anmelden. „Wristmeter" erscheint dort › *Installieren*.
 2. Die Watch-App kommt mit, wenn auf dem iPhone *Watch › Allgemein › Automatische
    App-Installation* aktiv ist. Sonst: iPhone-App **Watch** › ganz unten *Verfügbare Apps* ›
-   „Pokit" › *Installieren*. (Alternativ in TestFlight auf der Detailseite der App den Eintrag
+   „Wristmeter" › *Installieren*. (Alternativ in TestFlight auf der Detailseite der App den Eintrag
    für die Apple Watch verwenden.)
-3. Auf der Uhr **Pokit** öffnen, Bluetooth-Zugriff erlauben, Pokit einschalten und in der
+3. Auf der Uhr **Wristmeter** öffnen, Bluetooth-Zugriff erlauben, Pokit einschalten und in der
    Liste antippen.
 
 ## Danach
@@ -130,8 +132,9 @@ die vollständigen Logs zusätzlich als Artefakt `testflight-logs` angehängt.
 | `The bundle version must be higher than the previously uploaded version` | Sollte durch den Zeitstempel nicht vorkommen; Workflow einfach neu starten. |
 | Build erscheint nicht in TestFlight | Verarbeitung abwarten; Apple schickt bei Problemen eine E-Mail an die Apple-ID. |
 
-Der Signier- und Upload-Schritt konnte ohne Apple-Konto nicht vorab getestet werden. Falls er
-beim ersten Lauf hakt, hilft das Log aus `testflight-logs` beim Nachbessern des Workflows.
+App Store Connect meldet beim Hochladen eine Warnung zur SDK-Version (ab April 2027 wird das
+iOS-27-SDK verlangt). Sie verhindert den Upload nicht; bis dahin muss der Workflow auf ein
+neueres Xcode umgestellt werden.
 
 ## Geht es auch ohne Developer Program?
 
@@ -164,7 +167,7 @@ Signatur vor Ablauf der 7 Tage erneuern, solange der PC läuft.
 5. Mit der Apple-ID anmelden, das IPA auswählen, signieren und installieren lassen.
 6. Auf dem iPhone ggf. *Einstellungen › Allgemein › VPN & Geräteverwaltung* das
    Entwicklerzertifikat als vertrauenswürdig markieren und den Entwicklermodus einschalten.
-7. **Pokit** auf der Uhr öffnen.
+7. **Wristmeter** auf der Uhr öffnen.
 
 Zu beachten:
 
