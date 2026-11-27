@@ -271,6 +271,16 @@
         }
       }
     },
+    "Diagnostics": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnose"
+          }
+        }
+      }
+    },
     "Diode": {
       "localizations": {
         "de": {
@@ -527,6 +537,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nicht unterstützt"
+          }
+        }
+      }
+    },
+    "Nothing recorded yet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nichts aufgezeichnet"
           }
         }
       }

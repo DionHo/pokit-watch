@@ -93,6 +93,9 @@ struct DeviceView: View {
 
             Section {
                 LabeledContent("App", value: appVersion)
+                NavigationLink(value: Route.diagnostics) {
+                    Label("Diagnostics", systemImage: "stethoscope")
+                }
             } footer: {
                 Text("Unofficial app, not affiliated with Pokit Innovations.")
             }
@@ -129,5 +132,31 @@ struct DeviceView: View {
         let version = info?["CFBundleShortVersionString"] as? String ?? "?"
         let build = info?["CFBundleVersion"] as? String ?? "?"
         return "\(version) (\(build))"
+    }
+}
+
+/// The rolling record of link events, newest first. Meant to be screenshotted when
+/// something does not work, so the entries are plain technical English.
+struct DiagnosticsView: View {
+    @ObservedObject var log: DiagnosticsLog
+
+    var body: some View {
+        List {
+            if log.entries.isEmpty {
+                Text("Nothing recorded yet")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(log.entries.reversed()) { entry in
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(entry.time, format: .dateTime.hour().minute().second())
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                    Text(verbatim: entry.text)
+                        .font(.system(size: 12, design: .monospaced))
+                }
+                .listRowInsets(EdgeInsets(top: 3, leading: 6, bottom: 3, trailing: 6))
+            }
+        }
+        .navigationTitle("Diagnostics")
     }
 }

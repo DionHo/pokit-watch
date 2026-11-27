@@ -12,8 +12,8 @@ and shows the reading on your wrist. The iPhone is only needed to install the ap
 <p>
   <img src="docs/screenshots/large-1-voltage.png" width="170" alt="DC voltage reading with auto-range and min/max">
   <img src="docs/screenshots/large-2-continuity.png" width="170" alt="Continuity: green screen while the circuit is closed">
+  <img src="docs/screenshots/large-8-scope.png" width="170" alt="Oscilloscope with a square wave, peak-to-peak and frequency">
   <img src="docs/screenshots/large-5-modes.png" width="170" alt="Mode picker">
-  <img src="docs/screenshots/large-4-list.png" width="170" alt="Device list">
 </p>
 
 <sub>Screenshots are rendered by CI in the watch simulator, using the app's built-in demo meter.</sub>
@@ -52,6 +52,10 @@ asks the meter again and, if the link is really dead, reconnects from scratch.
    the value (or the pause button) to hold. The battery icon opens the device page.
 4. The oscilloscope and the data logger are at the end of the mode list. In the oscilloscope,
    tap the waveform to hold it and the left button for signal, range, time span and trigger.
+
+If something does not work, the device page (battery icon) has a *Diagnostics* entry at the
+bottom: a short record of what the app sent and what the meter answered. A screenshot of it
+says more than a description.
 
 Getting to it quickly:
 

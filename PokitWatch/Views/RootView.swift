@@ -3,6 +3,7 @@ import SwiftUI
 
 enum Route: Hashable {
     case device
+    case diagnostics
 }
 
 /// Decides which top-level screen is shown: a Bluetooth problem, the device list, or the
@@ -55,6 +56,8 @@ struct RootView: View {
                 switch route {
                 case .device:
                     DeviceView()
+                case .diagnostics:
+                    DiagnosticsView(log: pokit.diagnostics)
                 }
             }
         }

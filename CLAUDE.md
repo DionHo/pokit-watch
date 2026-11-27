@@ -65,8 +65,9 @@ exist on watchOS 10, and read the surrounding code before editing. Swift languag
   disconnects, becoming active reconnects. The owner asked for this to spare the meter's
   battery; do not reintroduce background connections or pending connects.
 - There is no way to read logs from the watch without Xcode. To debug behaviour on the device,
-  ask what the screen shows, and if that is not enough add an on-device diagnostics view
-  (a rolling log of connection events) rather than guessing.
+  ask the owner for a screenshot of *Diagnostics* (device page, bottom): a rolling record of
+  link events, commands sent (hex) and metadata received (`DiagnosticsLog`, filled from
+  `PokitCentral`). Add entries there for whatever a new feature needs rather than guessing.
 
 ## Conventions
 

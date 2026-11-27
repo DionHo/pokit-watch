@@ -214,7 +214,8 @@ struct ScopeView: View {
         if let frequency = summary.frequency {
             let swing = MeterDisplay.format(summary.peakToPeak, mode: mode).text
             let rate = ValueFormatter.format(frequency, unit: "Hz", digits: 3, minimum: .none).text
-            return "↕ \(swing)   \(rate)"
+            // U+FE0E keeps the arrow a text glyph; without it the system draws an emoji.
+            return "\u{2195}\u{FE0E} \(swing)   \(rate)"
         }
         let low = MeterDisplay.format(summary.minimum, mode: mode).text
         let high = MeterDisplay.format(summary.maximum, mode: mode).text
@@ -286,11 +287,13 @@ struct LoggerView: View {
                     .listRowBackground(Color.clear)
             } else if logger.isSampling {
                 runningSection
-            } else {
-                setupSection
             }
+            // A finished recording is what one came back for, so it goes above the setup.
             if let log = logger.log {
                 dataSection(log)
+            }
+            if pokit.phase == .ready, !logger.isSampling {
+                setupSection
             }
         }
         .toolbar {
